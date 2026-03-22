@@ -1,11 +1,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import electron from 'vite-plugin-electron';
 import renderer from 'vite-plugin-electron-renderer';
 import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [
+    tailwindcss(),
     react(),
     electron([
       {
@@ -14,7 +16,7 @@ export default defineConfig({
           build: {
             outDir: 'dist/main',
             rollupOptions: {
-              external: ['better-sqlite3']
+              external: ['better-sqlite3', 'pg', 'mysql2', 'mysql2/promise', 'mssql', '@clickhouse/client']
             }
           },
         },

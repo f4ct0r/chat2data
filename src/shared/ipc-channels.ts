@@ -9,6 +9,16 @@ export enum IpcChannels {
   STORAGE_GET_CONNECTIONS = 'storage:getConnections',
   STORAGE_DELETE_CONNECTION = 'storage:deleteConnection',
 
+  // Database
+  DB_TEST_CONNECTION = 'db:testConnection',
+  DB_CONNECT = 'db:connect',
+  DB_DISCONNECT = 'db:disconnect',
+  DB_EXECUTE_QUERY = 'db:executeQuery',
+  DB_GET_DATABASES = 'db:getDatabases',
+  DB_GET_SCHEMAS = 'db:getSchemas',
+  DB_GET_TABLES = 'db:getTables',
+  DB_GET_COLUMNS = 'db:getColumns',
+
   // System Test
   SYSTEM_PING = 'system:ping',
   SYSTEM_VERIFY_STORAGE = 'system:verifyStorage',

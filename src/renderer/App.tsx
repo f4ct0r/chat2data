@@ -1,10 +1,46 @@
 import React, { useState } from 'react';
 import { ConnectionConfig } from '../shared/types';
+import Layout from './components/Layout';
+import ConnectionListPanel from './components/ConnectionList/ConnectionListPanel';
+import { Button, Card, Typography, Space } from 'antd';
+import { PlusOutlined, SafetyCertificateOutlined, ApiOutlined, CodeOutlined, MessageOutlined } from '@ant-design/icons';
+import ObjectBrowser from './components/ObjectBrowser/ObjectBrowser';
+import WorkspaceTabs from './components/Tabs/WorkspaceTabs';
+import { useTabStore } from './store/tabStore';
+
+const { Title, Text } = Typography;
 
 const App: React.FC = () => {
   const [pingResponse, setPingResponse] = useState<string>('');
-  const [connections, setConnections] = useState<ConnectionConfig[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [verifyResult, setVerifyResult] = useState<any[]>([]);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+  const [selectedConnection, setSelectedConnection] = useState<ConnectionConfig | null>(null);
+  
+  const { tabs, addTab } = useTabStore();
+
+  const handleSelectConnection = async (conn: ConnectionConfig | null) => {
+    if (conn) {
+      try {
+        await window.api.db.connect(conn.id);
+        setSelectedConnectionId(conn.id);
+        setSelectedConnection(conn);
+      } catch (error) {
+        console.error('Failed to connect:', error);
+        // Could show a notification here
+      }
+    } else {
+      if (selectedConnectionId) {
+        try {
+          await window.api.db.disconnect(selectedConnectionId);
+        } catch (e) {
+          console.error('Failed to disconnect:', e);
+        }
+      }
+      setSelectedConnectionId(null);
+      setSelectedConnection(null);
+    }
+  };
 
   const handlePing = async () => {
     try {
@@ -30,20 +66,8 @@ const App: React.FC = () => {
       
       const newId = await window.api.storage.saveConnection(config);
       console.log('Created test connection with ID:', newId);
-      
-      // Refresh the list
-      await handleGetConnections();
     } catch (error) {
       console.error('Failed to create test connection:', error);
-    }
-  };
-
-  const handleGetConnections = async () => {
-    try {
-      const list = await window.api.storage.getConnections();
-      setConnections(list);
-    } catch (error) {
-      console.error('Failed to get connections:', error);
     }
   };
 
@@ -56,53 +80,107 @@ const App: React.FC = () => {
     }
   };
 
-  return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-      <h1>Chat2Data</h1>
-      <p>Electron + React + TypeScript + Vite Setup Complete!</p>
-      
-      <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-        <button onClick={handlePing} style={{ padding: '8px 16px', cursor: 'pointer' }}>
-          Ping Main Process
-        </button>
-        
-        <button onClick={handleCreateTestConnection} style={{ padding: '8px 16px', cursor: 'pointer' }}>
-          创建一条测试连接
-        </button>
-        
-        <button onClick={handleGetConnections} style={{ padding: '8px 16px', cursor: 'pointer' }}>
-          读取所有连接
-        </button>
+  const handleOpenSqlTab = () => {
+    if (selectedConnectionId && selectedConnection) {
+      addTab({
+        title: `SQL - ${selectedConnection.name}`,
+        type: 'sql',
+        connectionId: selectedConnectionId,
+      });
+    }
+  };
 
-        <button onClick={handleVerifyStorage} style={{ padding: '8px 16px', cursor: 'pointer' }}>
-          验证加密存储
-        </button>
+  const handleOpenChatTab = () => {
+    if (selectedConnectionId && selectedConnection) {
+      addTab({
+        title: `Chat - ${selectedConnection.name}`,
+        type: 'chat',
+        connectionId: selectedConnectionId,
+      });
+    }
+  };
+
+  const renderDashboard = () => (
+    <div className="p-8 h-full overflow-y-auto bg-gray-50/50">
+      <div className="max-w-4xl mx-auto space-y-6">
+        <header className="mb-8">
+          <Title level={2} className="!mb-1">Chat2Data Workspace</Title>
+          <Text type="secondary">Select a connection from the left panel to begin.</Text>
+        </header>
+
+        <Card title="Quick Actions" className="shadow-sm border-gray-100">
+          <Space wrap size="middle">
+            <Button type="primary" icon={<ApiOutlined />} onClick={handlePing}>
+              Ping Main Process
+            </Button>
+            <Button icon={<PlusOutlined />} onClick={handleCreateTestConnection}>
+              Create Test Connection
+            </Button>
+            <Button icon={<SafetyCertificateOutlined />} onClick={handleVerifyStorage}>
+              Verify Storage
+            </Button>
+          </Space>
+        </Card>
+
+        {pingResponse && (
+          <Card size="small" className="bg-green-50 border-green-200">
+            <Text type="success" strong>Response: {pingResponse}</Text>
+          </Card>
+        )}
+
+        {verifyResult.length > 0 && (
+          <Card title="Storage Verification Result" className="shadow-sm border-gray-100">
+            <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm border border-gray-200">
+              {JSON.stringify(verifyResult, null, 2)}
+            </pre>
+          </Card>
+        )}
+
+        {selectedConnection && (
+          <Card 
+            title={`Active Connection: ${selectedConnection.name}`} 
+            className="shadow-sm border-gray-100"
+            extra={
+              <Space>
+                <Button type="primary" icon={<CodeOutlined />} onClick={handleOpenSqlTab}>
+                  New SQL Editor
+                </Button>
+                <Button icon={<MessageOutlined />} onClick={handleOpenChatTab}>
+                  New Chat Agent
+                </Button>
+              </Space>
+            }
+          >
+            <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm border border-gray-200">
+              {JSON.stringify(selectedConnection, null, 2)}
+            </pre>
+          </Card>
+        )}
       </div>
-
-      {pingResponse && (
-        <p style={{ marginTop: '10px', color: 'green', fontWeight: 'bold' }}>
-          Response: {pingResponse}
-        </p>
-      )}
-
-      {verifyResult.length > 0 && (
-        <div style={{ marginTop: '20px' }}>
-          <h2>Storage Verification Result:</h2>
-          <pre style={{ background: '#e6f7ff', padding: '10px', borderRadius: '4px' }}>
-            {JSON.stringify(verifyResult, null, 2)}
-          </pre>
-        </div>
-      )}
-
-      {connections.length > 0 && (
-        <div style={{ marginTop: '20px' }}>
-          <h2>Connection List (Decoupled & Sanitized):</h2>
-          <pre style={{ background: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
-            {JSON.stringify(connections, null, 2)}
-          </pre>
-        </div>
-      )}
     </div>
+  );
+
+  return (
+    <Layout 
+      sidebarPanel={
+        <div className="flex h-full">
+          <ConnectionListPanel 
+            selectedConnectionId={selectedConnectionId}
+            onSelect={handleSelectConnection} 
+          />
+          {selectedConnectionId && (
+            <div className="w-64 border-r border-gray-200">
+              <ObjectBrowser 
+                connectionId={selectedConnectionId} 
+                connectionType={selectedConnection?.dbType} 
+              />
+            </div>
+          )}
+        </div>
+      }
+    >
+      {tabs.length > 0 ? <WorkspaceTabs /> : renderDashboard()}
+    </Layout>
   );
 };
 

@@ -32,6 +32,8 @@ Use TypeScript, 2-space indentation, and small modules with clear boundaries. Pr
 
 Add unit tests for core logic such as SQL classification, query execution normalization, and agent safety checks. Keep tests close to the code they cover. Name test files after the unit under test, such as `query-executor.test.ts` or `sql-rules.test.ts`.
 
+**MANDATORY CONSTRAINT**: Before concluding any task, you MUST run tests and ensure all tests pass. Do not deliver unverified or failing code to the user.
+
 ## Commit & Pull Request Guidelines
 
 Use short, imperative commit messages, optionally prefixed by type, for example `feat: add connection manager` or `docs: update design spec`. Pull requests should include a clear summary, scope, testing notes, and screenshots or recordings for UI changes. Call out any database or security implications explicitly.

@@ -3,6 +3,7 @@ import { join } from 'path';
 import { IpcChannels } from '../shared/ipc-channels';
 import { sqliteService } from '../core/storage/sqlite-service';
 import { CredentialService } from '../core/security/credential-service';
+import { connectionManager } from '../core/db/connection-manager';
 import { ConnectionConfig } from '../shared/types';
 import { randomUUID } from 'crypto';
 
@@ -41,6 +42,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle(IpcChannels.SYSTEM_VERIFY_STORAGE, async () => {
     const db = sqliteService.getDb();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows = db.prepare('SELECT id, name, encrypted_password FROM connections').all() as any[];
     
     // Check if passwords are encrypted
@@ -63,7 +65,7 @@ app.whenReady().then(() => {
     return verificationResults;
   });
 
-  ipcMain.handle(IpcChannels.STORAGE_SAVE_CONNECTION, async (event, config: ConnectionConfig) => {
+  ipcMain.handle(IpcChannels.STORAGE_SAVE_CONNECTION, async (_event, config: ConnectionConfig) => {
     const db = sqliteService.getDb();
     const id = config.id || randomUUID();
     
@@ -102,6 +104,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle(IpcChannels.STORAGE_GET_CONNECTIONS, async () => {
     const db = sqliteService.getDb();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows = db.prepare('SELECT * FROM connections').all() as any[];
     
     return rows.map(row => {
@@ -119,9 +122,42 @@ app.whenReady().then(() => {
     });
   });
 
-  ipcMain.handle(IpcChannels.STORAGE_DELETE_CONNECTION, async (event, id: string) => {
+  ipcMain.handle(IpcChannels.STORAGE_DELETE_CONNECTION, async (_event, id: string) => {
     const db = sqliteService.getDb();
     db.prepare('DELETE FROM connections WHERE id = ?').run(id);
+  });
+
+  // Database Handlers
+  ipcMain.handle(IpcChannels.DB_TEST_CONNECTION, async (_event, config: ConnectionConfig | { id: string }) => {
+    return await connectionManager.testConnection(config);
+  });
+
+  ipcMain.handle(IpcChannels.DB_CONNECT, async (_event, id: string) => {
+    await connectionManager.connect(id);
+  });
+
+  ipcMain.handle(IpcChannels.DB_DISCONNECT, async (_event, id: string) => {
+    await connectionManager.disconnect(id);
+  });
+
+  ipcMain.handle(IpcChannels.DB_EXECUTE_QUERY, async (_event, id: string, sql: string) => {
+    return await connectionManager.executeQuery(id, sql);
+  });
+
+  ipcMain.handle(IpcChannels.DB_GET_DATABASES, async (_event, id: string) => {
+    return await connectionManager.getDatabases(id);
+  });
+
+  ipcMain.handle(IpcChannels.DB_GET_SCHEMAS, async (_event, id: string, database?: string) => {
+    return await connectionManager.getSchemas(id, database);
+  });
+
+  ipcMain.handle(IpcChannels.DB_GET_TABLES, async (_event, id: string, database?: string, schema?: string) => {
+    return await connectionManager.getTables(id, database, schema);
+  });
+
+  ipcMain.handle(IpcChannels.DB_GET_COLUMNS, async (_event, id: string, database?: string, schema?: string, table?: string) => {
+    return await connectionManager.getColumns(id, database, schema, table);
   });
 
   createWindow();
