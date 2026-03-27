@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
+    "build:mac": "tsc && vite build && electron-builder --mac",
+    "build:win": "tsc && vite build && electron-builder --win",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "test": "vitest run",
     "postinstall": "electron-builder install-app-deps"
@@ -13,6 +15,8 @@
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
     "@clickhouse/client": "^1.18.2",
+    "@monaco-editor/react": "^4.7.0",
+    "@tanstack/react-virtual": "^3.13.23",
     "antd": "^6.3.3",
     "better-sqlite3": "^12.8.0",
     "lucide-react": "^0.577.0",
@@ -48,9 +52,33 @@
     "vitest": "^4.1.0"
   },
   "build": {
+    "appId": "com.chat2data.app",
+    "productName": "Chat2Data",
+    "copyright": "Copyright © 2026 Chat2Data",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
     "files": [
       "dist",
       "package.json"
-    ]
+    ],
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

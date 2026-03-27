@@ -154,13 +154,13 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({ connectionId }) => {
   const renderIcon = (type: NodeType) => {
     switch (type) {
       case 'database':
-        return <DatabaseOutlined className="text-blue-500" />;
+        return <DatabaseOutlined className="text-[#FF5722]" />;
       case 'schema':
-        return <FolderOutlined className="text-yellow-500" />;
+        return <FolderOutlined className="text-[#00ff00]" />;
       case 'table':
-        return <TableOutlined className="text-green-500" />;
+        return <TableOutlined className="text-[#a3a3a3]" />;
       case 'column':
-        return <ProfileOutlined className="text-gray-400" />;
+        return <ProfileOutlined className="text-[#737373]" />;
       default:
         return null;
     }
@@ -168,20 +168,20 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({ connectionId }) => {
 
   if (!connectionId) {
     return (
-      <div className="h-full flex items-center justify-center bg-white">
-        <Empty description="No connection selected" />
+      <div className="h-full flex items-center justify-center bg-[#0a0a0a]">
+        <Empty description={<span className="text-[#737373]">No connection selected</span>} />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-white border-r border-gray-200">
-      <div className="p-3 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-        <Text strong className="text-gray-700">Object Browser</Text>
+    <div className="flex flex-col h-full bg-[#0a0a0a] border-r border-[#333333]">
+      <div className="p-3 border-b border-[#333333] flex justify-between items-center bg-[#121212]">
+        <Text strong className="!text-[#FF5722] tracking-wider text-xs">OBJECT BROWSER</Text>
         <Tooltip title="Refresh">
           <Button 
             type="text" 
-            icon={<ReloadOutlined />} 
+            icon={<ReloadOutlined className="text-[#a3a3a3] hover:text-[#FF5722]" />} 
             size="small" 
             onClick={fetchRootNodes}
             loading={loading}
@@ -195,6 +195,7 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({ connectionId }) => {
           </div>
         ) : (
           <Tree
+            className="!bg-transparent !text-[#a3a3a3]"
             loadData={onLoadData}
             treeData={treeData}
             showIcon
@@ -202,9 +203,9 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({ connectionId }) => {
             titleRender={(nodeData) => {
               const node = nodeData as BrowserNode;
               return (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 hover:text-[#FF5722] transition-colors">
                   {renderIcon(node.type)}
-                  <span className="text-sm truncate" title={node.title}>{node.title}</span>
+                  <span className="text-sm truncate font-mono" title={node.title}>{node.title}</span>
                 </div>
               );
             }}

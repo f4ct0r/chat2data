@@ -4,11 +4,14 @@ import { DecryptedConnectionConfig } from '../../../shared/types';
 
 export class MysqlAdapter implements DatabaseDriver {
   private connection: Connection | null = null;
+  private config: DecryptedConnectionConfig | null = null;
 
   async connect(config: DecryptedConnectionConfig): Promise<void> {
     if (this.connection) {
       await this.disconnect();
     }
+    
+    this.config = config;
 
     this.connection = await createConnection({
       host: config.host,
@@ -148,5 +151,33 @@ export class MysqlAdapter implements DatabaseDriver {
       name: row.column_name || row.COLUMN_NAME,
       type: row.data_type || row.DATA_TYPE,
     }));
+  }
+
+  async killQuery(): Promise<void> {
+    if (!this.connection || !this.config) {
+      return;
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const threadId = (this.connection as any).threadId || (this.connection as any).connection?.threadId;
+      if (!threadId) {
+        throw new Error('Could not find threadId for current connection');
+      }
+
+      // Create a new connection just to kill the query
+      const killConn = await createConnection({
+        host: this.config.host,
+        port: this.config.port,
+        user: this.config.username,
+        password: this.config.password,
+        database: this.config.database,
+      });
+
+      await killConn.query(`KILL QUERY ${threadId}`);
+      await killConn.end();
+    } catch (error) {
+      console.error('Failed to kill MySQL query:', error);
+      throw error;
+    }
   }
 }

@@ -13,7 +13,7 @@ export class ConnectionManager {
   /**
    * 从 SQLite 获取连接配置并解密密码
    */
-  private getConfigFromStorage(id: string): DecryptedConnectionConfig {
+  public getConfigFromStorage(id: string): DecryptedConnectionConfig {
     const db = sqliteService.getDb();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const row = db.prepare('SELECT * FROM connections WHERE id = ?').get(id) as any;
@@ -147,6 +147,18 @@ export class ConnectionManager {
   public async getColumns(id: string, database?: string, schema?: string, table?: string): Promise<{name: string, type: string}[]> {
     const driver = this.getConnection(id);
     return await driver.getColumns(database, schema, table);
+  }
+
+  /**
+   * 中断当前连接上正在执行的查询
+   */
+  public async killQuery(id: string): Promise<void> {
+    const driver = this.getConnection(id);
+    if (driver.killQuery) {
+      await driver.killQuery();
+    } else {
+      throw new Error(`Connection ${id} does not support killQuery`);
+    }
   }
 }
 

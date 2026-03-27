@@ -1,14 +1,6 @@
-import { DecryptedConnectionConfig } from '../../shared/types';
+import { DecryptedConnectionConfig, QueryResult } from '../../shared/types';
 
-export interface QueryResult {
-  columns: string[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  rows: any[];
-  rowCount: number;
-  durationMs: number;
-  warnings?: string[];
-  error?: string;
-}
+export type { QueryResult };
 
 export interface DatabaseDriver {
   /** 建立数据库连接 */

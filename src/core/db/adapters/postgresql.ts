@@ -4,11 +4,14 @@ import { DecryptedConnectionConfig } from '../../../shared/types';
 
 export class PostgresAdapter implements DatabaseDriver {
   private client: Client | null = null;
+  private config: DecryptedConnectionConfig | null = null;
 
   async connect(config: DecryptedConnectionConfig): Promise<void> {
     if (this.client) {
       await this.disconnect();
     }
+    
+    this.config = config;
 
     this.client = new Client({
       host: config.host,
@@ -123,5 +126,33 @@ export class PostgresAdapter implements DatabaseDriver {
       name: row.column_name,
       type: row.data_type,
     }));
+  }
+
+  async killQuery(): Promise<void> {
+    if (!this.client || !this.config) {
+      return;
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pid = (this.client as any).processID;
+      if (!pid) {
+        throw new Error('Could not find processID for current connection');
+      }
+
+      const killClient = new Client({
+        host: this.config.host,
+        port: this.config.port,
+        user: this.config.username,
+        password: this.config.password,
+        database: this.config.database,
+      });
+
+      await killClient.connect();
+      await killClient.query('SELECT pg_cancel_backend($1)', [pid]);
+      await killClient.end();
+    } catch (error) {
+      console.error('Failed to kill PostgreSQL query:', error);
+      throw error;
+    }
   }
 }

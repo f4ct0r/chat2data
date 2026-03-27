@@ -36,11 +36,14 @@ export default defineConfig({
         },
       },
     ]),
-    renderer(),
+    process.env.NODE_ENV === 'test' ? null : renderer(),
   ],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
     },
+  },
+  test: {
+    environment: 'node',
   },
 });

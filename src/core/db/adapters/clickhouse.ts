@@ -4,6 +4,7 @@ import { DecryptedConnectionConfig } from '../../../shared/types';
 
 export class ClickhouseAdapter implements DatabaseDriver {
   private client: ClickHouseClient | null = null;
+  private currentQueryId: string | null = null;
 
   private getUrl(config: DecryptedConnectionConfig): string {
     const protocol = config.port === 8443 || config.port === 443 ? 'https' : 'http';
@@ -57,13 +58,16 @@ export class ClickhouseAdapter implements DatabaseDriver {
 
     const start = performance.now();
     try {
+      this.currentQueryId = globalThis.crypto.randomUUID();
       const resultSet = await this.client.query({
         query: sql,
         format: 'JSON',
+        query_id: this.currentQueryId,
       });
       
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dataset = await resultSet.json<any>();
+      this.currentQueryId = null;
       const durationMs = performance.now() - start;
 
       const rows = dataset.data || [];
@@ -79,6 +83,7 @@ export class ClickhouseAdapter implements DatabaseDriver {
       };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
+      this.currentQueryId = null;
       const durationMs = performance.now() - start;
       return {
         columns: [],
@@ -137,5 +142,18 @@ export class ClickhouseAdapter implements DatabaseDriver {
       name: row.name,
       type: row.type,
     }));
+  }
+
+  async killQuery(): Promise<void> {
+    if (!this.client || !this.currentQueryId) return;
+
+    try {
+      await this.client.command({
+        query: `KILL QUERY WHERE query_id = '${this.currentQueryId}' SYNC`,
+      });
+    } catch (error) {
+      console.error('Failed to kill ClickHouse query:', error);
+      throw error;
+    }
   }
 }

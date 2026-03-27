@@ -71,13 +71,13 @@ const ConnectionListPanel: React.FC<ConnectionListPanelProps> = ({ onSelect, sel
   };
 
   return (
-    <div className="w-64 h-full bg-white border-r border-gray-200 flex flex-col">
-      <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50/50">
-        <Text strong className="text-gray-700">Connections</Text>
+    <div className="w-64 h-full bg-[#0a0a0a] border-r border-[#333333] flex flex-col">
+      <div className="p-4 border-b border-[#333333] flex justify-between items-center bg-[#121212]">
+        <Text strong className="!text-[#FF5722] tracking-wider">CONNECTIONS</Text>
         <Tooltip title="Add Connection">
           <Button 
             type="text" 
-            icon={<PlusOutlined />} 
+            icon={<PlusOutlined className="text-[#a3a3a3] hover:text-[#FF5722]" />} 
             size="small" 
             onClick={handleAddClick} 
           />
@@ -92,22 +92,22 @@ const ConnectionListPanel: React.FC<ConnectionListPanelProps> = ({ onSelect, sel
             const isSelected = selectedConnectionId === item.id;
             return (
               <List.Item
-                className={`cursor-pointer transition-colors px-4 py-3 border-b border-gray-100
-                  ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                className={`cursor-pointer transition-colors !px-4 py-3 border-b border-[#1a1a1a]
+                  ${isSelected ? 'bg-[#FF5722]/10 border-l-2 !border-l-[#FF5722]' : 'hover:bg-[#1a1a1a]'}`}
                 onClick={() => onSelect(item)}
               >
-                <div className="w-full flex justify-between items-center group">
-                  <Space className="w-full overflow-hidden">
-                    <DatabaseOutlined className={isSelected ? 'text-blue-600' : 'text-gray-400'} />
+                <div className="w-full flex justify-between items-center group ml-1">
+                  <Space className="w-full overflow-hidden" size={12}>
+                    <DatabaseOutlined className={isSelected ? 'text-[#FF5722]' : 'text-[#737373]'} />
                     <div className="flex flex-col max-w-[130px]">
                       <Text 
                         ellipsis 
-                        className={`text-sm ${isSelected ? 'font-medium text-blue-700' : 'text-gray-700'}`}
+                        className={`text-sm ${isSelected ? 'font-medium !text-[#FF5722]' : '!text-[#a3a3a3]'}`}
                         title={item.name}
                       >
                         {item.name}
                       </Text>
-                      <Text type="secondary" className="text-xs" ellipsis>
+                      <Text className="text-xs !text-[#737373]" ellipsis>
                         {item.dbType}
                       </Text>
                     </div>
@@ -118,7 +118,7 @@ const ConnectionListPanel: React.FC<ConnectionListPanelProps> = ({ onSelect, sel
                       <Button 
                         type="text" 
                         size="small" 
-                        icon={<EditOutlined className="text-gray-500" />} 
+                        icon={<EditOutlined className="text-[#a3a3a3] hover:text-[#FF5722]" />} 
                         onClick={(e) => handleEditClick(item, e)}
                       />
                     </Tooltip>
@@ -147,13 +147,13 @@ const ConnectionListPanel: React.FC<ConnectionListPanelProps> = ({ onSelect, sel
           }}
         />
         {connections.length === 0 && !loading && (
-          <div className="p-8 text-center flex flex-col items-center justify-center text-gray-400 h-full">
-            <DisconnectOutlined className="text-4xl mb-4 text-gray-300" />
-            <Text type="secondary" className="text-sm">No connections found</Text>
+          <div className="p-8 text-center flex flex-col items-center justify-center text-[#737373] h-full">
+            <DisconnectOutlined className="text-4xl mb-4 text-[#333333]" />
+            <Text className="text-sm !text-[#737373]">No connections found</Text>
             <Button 
               type="link" 
               onClick={handleAddClick} 
-              className="mt-2"
+              className="mt-2 text-[#FF5722] hover:text-[#E64A19]"
               icon={<PlusOutlined />}
             >
               Add Connection

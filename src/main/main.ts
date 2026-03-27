@@ -4,8 +4,12 @@ import { IpcChannels } from '../shared/ipc-channels';
 import { sqliteService } from '../core/storage/sqlite-service';
 import { CredentialService } from '../core/security/credential-service';
 import { connectionManager } from '../core/db/connection-manager';
-import { ConnectionConfig } from '../shared/types';
+import { QueryExecutor } from '../core/executor/query-executor';
+import { ChatAgent, AgentContext } from '../core/agent/chat-agent';
+import { ConnectionConfig, LlmProvider } from '../shared/types';
 import { randomUUID } from 'crypto';
+
+const shouldOpenDevTools = process.env.CHAT2DATA_OPEN_DEVTOOLS === 'true';
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -15,16 +19,32 @@ function createWindow() {
       preload: join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      // Temporarily disable DevTools in dev mode completely for the moment or suppress this error differently
     },
   });
 
+  // Suppress specific devtools error
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    if (message.includes('Autofill.enable')) {
+      event.preventDefault();
+      return;
+    }
+    console.log(`[Renderer Console] ${level} ${message} (${sourceId}:${line})`);
+  });
+
   if (process.env.VITE_DEV_SERVER_URL) {
+    console.log('Loading DEV server URL:', process.env.VITE_DEV_SERVER_URL);
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-    mainWindow.webContents.openDevTools();
+    if (shouldOpenDevTools) {
+      mainWindow.webContents.openDevTools({ mode: 'detach' });
+    }
   } else {
     mainWindow.loadFile(join(__dirname, '../index.html'));
   }
 }
+
+// Ignore autofill errors
+app.commandLine.appendSwitch('disable-features', 'AutofillServerCommunication');
 
 app.whenReady().then(() => {
   // Initialize SQLite Database
@@ -141,7 +161,15 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle(IpcChannels.DB_EXECUTE_QUERY, async (_event, id: string, sql: string) => {
-    return await connectionManager.executeQuery(id, sql);
+    return await QueryExecutor.execute(id, sql);
+  });
+
+  ipcMain.handle(IpcChannels.DB_KILL_QUERY, async (_event, id: string) => {
+    await QueryExecutor.cancel(id);
+  });
+
+  ipcMain.handle(IpcChannels.DB_GET_EXECUTION_STATUS, async (_event, id: string) => {
+    return QueryExecutor.getStatus(id);
   });
 
   ipcMain.handle(IpcChannels.DB_GET_DATABASES, async (_event, id: string) => {
@@ -158,6 +186,70 @@ app.whenReady().then(() => {
 
   ipcMain.handle(IpcChannels.DB_GET_COLUMNS, async (_event, id: string, database?: string, schema?: string, table?: string) => {
     return await connectionManager.getColumns(id, database, schema, table);
+  });
+
+  // Settings & Security Handlers
+  ipcMain.handle(IpcChannels.SETTINGS_SAVE_API_KEY, async (_event, provider: string, apiKey: string) => {
+    CredentialService.saveApiKey(provider, apiKey);
+  });
+
+  ipcMain.handle(IpcChannels.SETTINGS_GET_API_KEY, async (_event, provider: string) => {
+    return CredentialService.getApiKey(provider);
+  });
+
+  ipcMain.handle(IpcChannels.SETTINGS_SAVE_PRIVACY_CONSENT, async (_event, consented: boolean) => {
+    CredentialService.savePrivacyConsent(consented);
+  });
+
+  ipcMain.handle(IpcChannels.SETTINGS_GET_PRIVACY_CONSENT, async () => {
+    return CredentialService.getPrivacyConsent();
+  });
+
+  ipcMain.handle(IpcChannels.SETTINGS_GET_LLM_PROVIDERS, async () => {
+    const data = sqliteService.getSetting('llm_providers');
+    if (!data) return [];
+    try {
+      const providers = JSON.parse(data) as LlmProvider[];
+      for (const p of providers) {
+        // Do not send actual API keys back to renderer, except maybe a placeholder if it exists
+        const key = CredentialService.getApiKey(`llm_${p.id}`);
+        p.apiKey = key ? '********' : '';
+      }
+      return providers;
+    } catch (e) {
+      return [];
+    }
+  });
+
+  ipcMain.handle(IpcChannels.SETTINGS_SAVE_LLM_PROVIDERS, async (_event, providers: LlmProvider[]) => {
+    const toSave = providers.map(p => {
+      const providerId = p.id || randomUUID();
+      // If the user provided a new api key (not the mask), save it
+      if (p.apiKey !== undefined && p.apiKey !== '' && p.apiKey !== '********') {
+        CredentialService.saveApiKey(`llm_${providerId}`, p.apiKey);
+      }
+      return {
+        id: providerId,
+        name: p.name.trim(),
+        provider: p.provider,
+        baseUrl: p.baseUrl?.trim() || undefined,
+        model: p.model.trim(),
+      };
+    });
+    sqliteService.setSetting('llm_providers', JSON.stringify(toSave));
+  });
+
+  ipcMain.handle(IpcChannels.SETTINGS_GET_ACTIVE_LLM_PROVIDER, async () => {
+    return sqliteService.getSetting('active_llm_provider');
+  });
+
+  ipcMain.handle(IpcChannels.SETTINGS_SET_ACTIVE_LLM_PROVIDER, async (_event, id: string) => {
+    sqliteService.setSetting('active_llm_provider', id);
+  });
+
+  // Agent Handlers
+  ipcMain.handle(IpcChannels.AGENT_GENERATE_SQL, async (_event, prompt: string, context: AgentContext, providerId?: string) => {
+    return await ChatAgent.generateSql(prompt, context, providerId);
   });
 
   createWindow();

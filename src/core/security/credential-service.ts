@@ -1,4 +1,5 @@
 import { safeStorage } from 'electron';
+import { sqliteService } from '../storage/sqlite-service';
 
 export class CredentialService {
   /**
@@ -48,5 +49,49 @@ export class CredentialService {
       console.error('Failed to decode hex:', error);
       return null;
     }
+  }
+
+  /**
+   * 保存 LLM API Key
+   * @param provider 提供商，例如 'openai' 或 'anthropic'
+   * @param apiKey 明文 API Key
+   */
+  static saveApiKey(provider: string, apiKey: string): void {
+    if (!apiKey) {
+      sqliteService.setSetting(`api_key_${provider}`, '');
+      return;
+    }
+    const encrypted = this.encrypt(apiKey);
+    if (encrypted) {
+      sqliteService.setSetting(`api_key_${provider}`, encrypted);
+    }
+  }
+
+  /**
+   * 获取并解密 LLM API Key
+   * @param provider 提供商，例如 'openai' 或 'anthropic'
+   * @returns 解密后的明文 API Key
+   */
+  static getApiKey(provider: string): string | null {
+    const encrypted = sqliteService.getSetting(`api_key_${provider}`);
+    if (!encrypted) return null;
+    return this.decrypt(encrypted);
+  }
+
+  /**
+   * 保存隐私协议同意状态
+   * @param consented 是否同意
+   */
+  static savePrivacyConsent(consented: boolean): void {
+    sqliteService.setSetting('privacy_consented', consented ? 'true' : 'false');
+  }
+
+  /**
+   * 获取隐私协议同意状态
+   * @returns 是否已同意
+   */
+  static getPrivacyConsent(): boolean {
+    const val = sqliteService.getSetting('privacy_consented');
+    return val === 'true';
   }
 }

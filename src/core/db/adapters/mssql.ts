@@ -4,6 +4,7 @@ import { DecryptedConnectionConfig } from '../../../shared/types';
 
 export class MssqlAdapter implements DatabaseDriver {
   private pool: sql.ConnectionPool | null = null;
+  private currentRequest: sql.Request | null = null;
 
   private getConfig(config: DecryptedConnectionConfig): sql.config {
     return {
@@ -55,7 +56,10 @@ export class MssqlAdapter implements DatabaseDriver {
 
     const start = performance.now();
     try {
-      const result = await this.pool.request().query(sqlQuery);
+      this.currentRequest = this.pool.request();
+      const result = await this.currentRequest.query(sqlQuery);
+      this.currentRequest = null;
+      
       const durationMs = performance.now() - start;
 // Ensure recordset exists
       const rows = result.recordset || [];
@@ -70,6 +74,7 @@ export class MssqlAdapter implements DatabaseDriver {
       };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
+      this.currentRequest = null;
       const durationMs = performance.now() - start;
       return {
         columns: [],
@@ -116,5 +121,11 @@ export class MssqlAdapter implements DatabaseDriver {
       name: row.COLUMN_NAME,
       type: row.DATA_TYPE,
     }));
+  }
+
+  async killQuery(): Promise<void> {
+    if (this.currentRequest) {
+      this.currentRequest.cancel();
+    }
   }
 }

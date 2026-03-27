@@ -1,1 +1,113 @@
 @import "tailwindcss";
+
+html, body, #root {
+  height: 100vh;
+  width: 100vw;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #0a0a0a;
+  color: #a3a3a3;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+body {
+  background: #0a0a0a;
+}
+
+.ant-app {
+  min-height: 100vh;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #050505;
+}
+::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #FF5722;
+}
+
+/* Antd Overrides for Terminal Theme */
+.ant-tabs-card > .ant-tabs-nav .ant-tabs-tab,
+.ant-tabs-card > div > .ant-tabs-nav .ant-tabs-tab {
+  background: #121212 !important;
+  border-color: #333333 !important;
+  border-bottom: none !important;
+  color: #a3a3a3 !important;
+}
+
+.ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active,
+.ant-tabs-card > div > .ant-tabs-nav .ant-tabs-tab-active {
+  background: #050505 !important;
+  border-color: #333333 !important;
+  border-bottom-color: #050505 !important;
+  color: #FF5722 !important;
+}
+
+/* Default line tabs (like in SqlWorkspace) */
+.ant-tabs-nav::before {
+  border-bottom: 1px solid #333333 !important;
+}
+.ant-tabs-tab {
+  color: #737373 !important;
+  font-family: 'Courier New', Courier, monospace;
+}
+.ant-tabs-tab:hover {
+  color: #FF5722 !important;
+}
+.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #FF5722 !important;
+  text-shadow: 0 0 5px rgba(255,87,34,0.3);
+}
+.ant-tabs-ink-bar {
+  background: #FF5722 !important;
+}
+
+/* Hide Monaco Editor internal scrollbars and overlays */
+.monaco-editor .decorationsOverviewRuler {
+  display: none !important;
+}
+
+.monaco-editor .margin {
+  background-color: #000000 !important;
+}
+
+.monaco-editor .scroll-decoration {
+  display: none !important;
+}
+
+/* Fix Monaco Editor Layout in flex container */
+.monaco-editor {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.monaco-editor .overflow-guard {
+  width: 100% !important;
+}
+
+.workspace-tabs {
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-tabs > .ant-tabs-content-holder {
+  flex: 1;
+  overflow: hidden;
+}
+
+.workspace-tabs > .ant-tabs-content-holder > .ant-tabs-content {
+  height: 100%;
+}
+
+.workspace-tabs > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane {
+  height: 100%;
+}
