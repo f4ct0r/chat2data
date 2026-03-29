@@ -15,6 +15,8 @@ export interface SqlEditorCompletionContext {
 const contextByModelUri = new Map<string, SqlEditorCompletionContext>();
 let providerRegistered = false;
 
+const TABLE_CLAUSES = new Set(['from', 'join', 'update']);
+
 const toMonacoKind = (monaco: {
   languages: {
     CompletionItemKind: Record<string, number>;
@@ -90,25 +92,49 @@ export const createSqlCompletionProvider = (
     const sql = model.getValue();
     const prefix = getPrefixFromModel(model, position);
     const cursorOffset = model.getOffsetAt(position);
-    let schemaIndex: CompletionSchemaIndex | null = null;
-
-    if (editorContext) {
-      try {
-        schemaIndex = await window.api.db.getSchemaIndex(
-          editorContext.connectionId,
-          editorContext.database,
-          editorContext.schema
-        );
-      } catch {
-        schemaIndex = null;
-      }
-    }
-
     const completionContext = resolveSqlCompletionContext(
       sql,
       cursorOffset,
       editorContext?.dbType || 'mysql'
     );
+    let schemaIndex: CompletionSchemaIndex | null = null;
+
+    if (editorContext) {
+      const canLoadSchemaIndex = Boolean(editorContext.database);
+
+      if (canLoadSchemaIndex) {
+        try {
+          schemaIndex = await window.api.db.getSchemaIndex(
+            editorContext.connectionId,
+            editorContext.database,
+            editorContext.schema
+          );
+        } catch {
+          schemaIndex = null;
+        }
+      }
+
+      if (!schemaIndex && TABLE_CLAUSES.has(completionContext.clause)) {
+        try {
+          const tables = await window.api.db.getTables(
+            editorContext.connectionId,
+            editorContext.database,
+            editorContext.schema
+          );
+          schemaIndex = {
+            database: editorContext.database || '',
+            schema: editorContext.schema,
+            lastUpdated: Date.now(),
+            tables: tables.map((tableName) => ({
+              name: tableName,
+              columns: [],
+            })),
+          };
+        } catch {
+          schemaIndex = null;
+        }
+      }
+    }
 
     const suggestions = buildSqlCompletionSuggestions(completionContext, schemaIndex, prefix);
     const range = getRangeFromModel(model, position);

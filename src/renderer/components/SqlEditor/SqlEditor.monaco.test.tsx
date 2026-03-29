@@ -98,6 +98,47 @@ describe('SqlEditor Monaco bootstrap', () => {
   });
 });
 
+describe('sql execute shortcut detection', () => {
+  it('matches Command+Enter on macOS', async () => {
+    const { isSqlExecuteShortcut } = await import('./SqlEditor');
+
+    expect(
+      isSqlExecuteShortcut({
+        platform: 'MacIntel',
+        key: 'Enter',
+        metaKey: true,
+        ctrlKey: false,
+      })
+    ).toBe(true);
+  });
+
+  it('matches Control+Enter on Windows', async () => {
+    const { isSqlExecuteShortcut } = await import('./SqlEditor');
+
+    expect(
+      isSqlExecuteShortcut({
+        platform: 'Win32',
+        key: 'Enter',
+        metaKey: false,
+        ctrlKey: true,
+      })
+    ).toBe(true);
+  });
+
+  it('does not match Control+Enter on macOS', async () => {
+    const { isSqlExecuteShortcut } = await import('./SqlEditor');
+
+    expect(
+      isSqlExecuteShortcut({
+        platform: 'MacIntel',
+        key: 'Enter',
+        metaKey: false,
+        ctrlKey: true,
+      })
+    ).toBe(false);
+  });
+});
+
 describe('sql completion provider', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -105,6 +146,7 @@ describe('sql completion provider', () => {
     (globalThis as typeof globalThis & { api: unknown }).api = {
       db: {
         getSchemaIndex: vi.fn(),
+        getTables: vi.fn(),
       },
     };
   });
@@ -252,6 +294,50 @@ describe('sql completion provider', () => {
     expect(result.suggestions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ label: 'SELECT' }),
+      ])
+    );
+  });
+
+  it('falls back to table listing when schema indexing has no database context', async () => {
+    vi.mocked(window.api.db.getTables).mockResolvedValue(['users', 'user_events']);
+
+    const { createSqlCompletionProvider } = await import('./sql-completion-provider');
+
+    const provider = createSqlCompletionProvider({
+      languages: {
+        CompletionItemKind: {
+          Keyword: 14,
+          Snippet: 27,
+          Field: 5,
+          Function: 1,
+          Class: 6,
+        },
+      },
+    } as never, () => ({
+      connectionId: 'conn-1',
+      dbType: 'postgres',
+      schema: 'public',
+    }));
+
+    const result = await provider.provideCompletionItems(
+      {
+        getValue: () => 'SELECT * FROM us',
+        getOffsetAt: () => 'SELECT * FROM us'.length,
+        getWordUntilPosition: () => ({
+          word: 'us',
+          startColumn: 15,
+          endColumn: 17,
+        }),
+      } as never,
+      { lineNumber: 1, column: 'SELECT * FROM us'.length + 1 } as never
+    );
+
+    expect(window.api.db.getSchemaIndex).not.toHaveBeenCalled();
+    expect(window.api.db.getTables).toHaveBeenCalledWith('conn-1', undefined, 'public');
+    expect(result.suggestions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'users' }),
+        expect.objectContaining({ label: 'user_events' }),
       ])
     );
   });

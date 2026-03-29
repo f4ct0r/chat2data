@@ -262,6 +262,7 @@ const App: React.FC = () => {
                   <ObjectBrowser 
                     connectionId={selectedConnectionId} 
                     connectionType={selectedConnection?.dbType} 
+                    connectionDatabase={selectedConnection?.database}
                     onPreviewTable={handlePreviewTable}
                   />
                 </div>

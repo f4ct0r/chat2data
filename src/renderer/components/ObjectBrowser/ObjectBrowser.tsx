@@ -16,6 +16,7 @@ const { Text } = Typography;
 interface ObjectBrowserProps {
   connectionId: string | null;
   connectionType?: ConnectionConfig['dbType'];
+  connectionDatabase?: string;
   onPreviewTable?: (request: TablePreviewRequest) => void;
 }
 
@@ -32,9 +33,27 @@ interface BrowserNode {
   children?: BrowserNode[];
 }
 
+export const buildRootNodes = (
+  databases: string[],
+  connectionDatabase?: string
+): BrowserNode[] => {
+  const visibleDatabases = connectionDatabase
+    ? databases.filter((database) => database === connectionDatabase)
+    : databases;
+
+  return visibleDatabases.map((database) => ({
+    key: `db:${database}`,
+    title: database,
+    type: 'database',
+    database,
+    isLeaf: false,
+  }));
+};
+
 const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
   connectionId,
   connectionType,
+  connectionDatabase,
   onPreviewTable,
 }) => {
   const { t } = useI18n();
@@ -51,13 +70,7 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
 
       // For some DBs we might want to start with databases, for others schemas
       const dbs = await window.api.db.getDatabases(connectionId);
-      const rootNodes: BrowserNode[] = dbs.map(db => ({
-        key: `db:${db}`,
-        title: db,
-        type: 'database',
-        database: db,
-        isLeaf: false,
-      }));
+      const rootNodes = buildRootNodes(dbs, connectionDatabase);
       setTreeData(rootNodes);
     } catch (error) {
       console.error('Failed to load root nodes:', error);
@@ -73,7 +86,7 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
       setTreeData([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectionId]);
+  }, [connectionDatabase, connectionId]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onLoadData = async (node: any) => {

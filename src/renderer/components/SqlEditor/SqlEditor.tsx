@@ -9,6 +9,28 @@ import {
   setSqlCompletionContext,
 } from './sql-completion-provider';
 
+interface SqlExecuteShortcutInput {
+  platform: string;
+  key: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+}
+
+const isMacPlatform = (platform: string) => /mac/i.test(platform);
+
+export const isSqlExecuteShortcut = ({
+  platform,
+  key,
+  metaKey,
+  ctrlKey,
+}: SqlExecuteShortcutInput): boolean => {
+  if (key !== 'Enter') {
+    return false;
+  }
+
+  return isMacPlatform(platform) ? metaKey : ctrlKey;
+};
+
 interface SqlEditorProps {
   value: string;
   onChange: (value: string | undefined) => void;
@@ -67,6 +89,24 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
     onChange(value);
   };
 
+  const handleEditorKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (
+      !onExecute ||
+      !isSqlExecuteShortcut({
+        platform: window.navigator.platform,
+        key: event.key,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+      })
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    onExecute();
+  };
+
   const handleEditorDidMount: OnMount = (editor, monacoInstance) => {
     editorRef.current = editor;
     if (connectionId && dbType) {
@@ -122,7 +162,10 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
   }, []);
 
   return (
-    <div className="flex-1 w-full border border-[#333333] rounded-sm overflow-hidden bg-[#000000] relative min-h-0 flex flex-col">
+    <div
+      className="flex-1 w-full border border-[#333333] rounded-sm overflow-hidden bg-[#000000] relative min-h-0 flex flex-col"
+      onKeyDownCapture={handleEditorKeyDownCapture}
+    >
       <div className="flex-1 min-h-0 relative">
         <Editor
           height={height}

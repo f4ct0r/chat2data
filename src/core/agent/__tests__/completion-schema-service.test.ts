@@ -147,4 +147,43 @@ describe('completionSchemaService', () => {
       tables: [],
     });
   });
+
+  it('falls back to the stored connection database when callers omit the completion database context', async () => {
+    vi.mocked(connectionManager.getConfigFromStorage).mockReturnValue({
+      id: 'conn-4',
+      name: 'Default Warehouse',
+      dbType: 'postgres',
+      host: 'localhost',
+      port: 5432,
+      username: 'postgres',
+      database: 'warehouse',
+    });
+
+    const indexedSchema: SchemaIndex = {
+      database: 'warehouse',
+      schema: 'public',
+      lastUpdated: 999,
+      tables: new Map([
+        [
+          'line_items',
+          {
+            name: 'line_items',
+            columns: [{ name: 'id', type: 'uuid' }],
+          },
+        ],
+      ]),
+    };
+
+    vi.mocked(schemaIndexer.getIndex).mockReturnValue(indexedSchema);
+
+    const { completionSchemaService } = await import('../completion-schema-service');
+
+    const result = await completionSchemaService.getSchemaIndex('conn-4', undefined, 'public');
+
+    expect(schemaIndexer.getIndex).toHaveBeenCalledWith('conn-4', 'warehouse', 'public');
+    expect(result?.database).toBe('warehouse');
+    expect(result?.tables).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'line_items' })])
+    );
+  });
 });
