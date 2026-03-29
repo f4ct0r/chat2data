@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CompletionSchemaIndex } from '../../../shared/types';
 
 const loaderConfig = vi.fn();
 const bundledMonaco = {
@@ -94,5 +95,164 @@ describe('SqlEditor Monaco bootstrap', () => {
     expect(monacoEnvironment?.getWorker('', 'html')).toBeInstanceOf(MockHtmlWorker);
     expect(monacoEnvironment?.getWorker('', 'javascript')).toBeInstanceOf(MockTsWorker);
     expect(monacoEnvironment?.getWorker('', 'sql')).toBeInstanceOf(MockEditorWorker);
+  });
+});
+
+describe('sql completion provider', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    (globalThis as typeof globalThis & { window?: unknown }).window = globalThis as typeof globalThis & { api: unknown };
+    (globalThis as typeof globalThis & { api: unknown }).api = {
+      db: {
+        getSchemaIndex: vi.fn(),
+      },
+    };
+  });
+
+  it('returns table suggestions after FROM', async () => {
+    const schemaIndex: CompletionSchemaIndex = {
+      database: 'analytics',
+      schema: 'public',
+      lastUpdated: 1,
+      tables: [{ name: 'users', columns: [{ name: 'id', type: 'uuid' }] }],
+    };
+
+    vi.mocked(window.api.db.getSchemaIndex).mockResolvedValue(schemaIndex);
+
+    const { createSqlCompletionProvider } = await import('./sql-completion-provider');
+
+    const provider = createSqlCompletionProvider({
+      languages: {
+        CompletionItemKind: {
+          Keyword: 14,
+          Snippet: 27,
+          Field: 5,
+          Function: 1,
+          Class: 6,
+        },
+      },
+    } as never, () => ({
+      connectionId: 'conn-1',
+      dbType: 'postgres',
+      database: 'analytics',
+      schema: 'public',
+    }));
+
+    const result = await provider.provideCompletionItems(
+      {
+        getValue: () => 'SELECT * FROM us',
+        getOffsetAt: () => 'SELECT * FROM us'.length,
+        getWordUntilPosition: () => ({
+          word: 'us',
+          startColumn: 15,
+          endColumn: 17,
+        }),
+      } as never,
+      { lineNumber: 1, column: 'SELECT * FROM us'.length + 1 } as never
+    );
+
+    expect(result.suggestions[0]).toMatchObject({
+      label: 'users',
+    });
+  });
+
+  it('returns alias scoped column suggestions after member access', async () => {
+    const schemaIndex: CompletionSchemaIndex = {
+      database: 'analytics',
+      schema: 'public',
+      lastUpdated: 1,
+      tables: [
+        {
+          name: 'users',
+          columns: [
+            { name: 'id', type: 'uuid' },
+            { name: 'email', type: 'text' },
+          ],
+        },
+      ],
+    };
+
+    vi.mocked(window.api.db.getSchemaIndex).mockResolvedValue(schemaIndex);
+
+    const { createSqlCompletionProvider } = await import('./sql-completion-provider');
+
+    const provider = createSqlCompletionProvider({
+      languages: {
+        CompletionItemKind: {
+          Keyword: 14,
+          Snippet: 27,
+          Field: 5,
+          Function: 1,
+          Class: 6,
+        },
+      },
+    } as never, () => ({
+      connectionId: 'conn-1',
+      dbType: 'postgres',
+      database: 'analytics',
+      schema: 'public',
+    }));
+
+    const result = await provider.provideCompletionItems(
+      {
+        getValue: () => 'SELECT * FROM users u WHERE u.',
+        getOffsetAt: () => 'SELECT * FROM users u WHERE u.'.length,
+        getWordUntilPosition: () => ({
+          word: '',
+          startColumn: 31,
+          endColumn: 31,
+        }),
+      } as never,
+      { lineNumber: 1, column: 'SELECT * FROM users u WHERE u.'.length + 1 } as never
+    );
+
+    expect(result.suggestions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'id' }),
+        expect.objectContaining({ label: 'email' }),
+      ])
+    );
+  });
+
+  it('falls back to keyword suggestions when schema lookup fails', async () => {
+    vi.mocked(window.api.db.getSchemaIndex).mockRejectedValue(new Error('boom'));
+
+    const { createSqlCompletionProvider } = await import('./sql-completion-provider');
+
+    const provider = createSqlCompletionProvider({
+      languages: {
+        CompletionItemKind: {
+          Keyword: 14,
+          Snippet: 27,
+          Field: 5,
+          Function: 1,
+          Class: 6,
+        },
+      },
+    } as never, () => ({
+      connectionId: 'conn-1',
+      dbType: 'postgres',
+      database: 'analytics',
+      schema: 'public',
+    }));
+
+    const result = await provider.provideCompletionItems(
+      {
+        getValue: () => 'SEL',
+        getOffsetAt: () => 3,
+        getWordUntilPosition: () => ({
+          word: 'SEL',
+          startColumn: 1,
+          endColumn: 4,
+        }),
+      } as never,
+      { lineNumber: 1, column: 4 } as never
+    );
+
+    expect(result.suggestions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'SELECT' }),
+      ])
+    );
   });
 });

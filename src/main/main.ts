@@ -6,8 +6,9 @@ import { CredentialService } from '../core/security/credential-service';
 import { connectionManager } from '../core/db/connection-manager';
 import { QueryExecutor } from '../core/executor/query-executor';
 import { ChatAgent, AgentContext } from '../core/agent/chat-agent';
-import { ConnectionConfig, LlmProvider } from '../shared/types';
+import { AppLanguage, ConnectionConfig, LlmProvider } from '../shared/types';
 import { randomUUID } from 'crypto';
+import { completionSchemaService } from '../core/agent/completion-schema-service';
 
 const shouldOpenDevTools = process.env.CHAT2DATA_OPEN_DEVTOOLS === 'true';
 
@@ -188,6 +189,18 @@ app.whenReady().then(() => {
     return await connectionManager.getColumns(id, database, schema, table);
   });
 
+  ipcMain.handle(IpcChannels.DB_BUILD_SCHEMA_INDEX, async (_event, id: string, database?: string, schema?: string) => {
+    return await completionSchemaService.buildSchemaIndex(id, database, schema);
+  });
+
+  ipcMain.handle(IpcChannels.DB_GET_SCHEMA_INDEX, async (_event, id: string, database?: string, schema?: string) => {
+    return await completionSchemaService.getSchemaIndex(id, database, schema);
+  });
+
+  ipcMain.handle(IpcChannels.DB_REFRESH_SCHEMA_INDEX, async (_event, id: string, database?: string, schema?: string) => {
+    return await completionSchemaService.refreshSchemaIndex(id, database, schema);
+  });
+
   // Settings & Security Handlers
   ipcMain.handle(IpcChannels.SETTINGS_SAVE_API_KEY, async (_event, provider: string, apiKey: string) => {
     CredentialService.saveApiKey(provider, apiKey);
@@ -203,6 +216,14 @@ app.whenReady().then(() => {
 
   ipcMain.handle(IpcChannels.SETTINGS_GET_PRIVACY_CONSENT, async () => {
     return CredentialService.getPrivacyConsent();
+  });
+
+  ipcMain.handle(IpcChannels.SETTINGS_GET_APP_LANGUAGE, async () => {
+    return CredentialService.getAppLanguage();
+  });
+
+  ipcMain.handle(IpcChannels.SETTINGS_SET_APP_LANGUAGE, async (_event, language: AppLanguage) => {
+    CredentialService.saveAppLanguage(language);
   });
 
   ipcMain.handle(IpcChannels.SETTINGS_GET_LLM_PROVIDERS, async () => {

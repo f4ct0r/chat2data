@@ -25,6 +25,27 @@ export interface QueryResult {
   error?: string;
 }
 
+export interface CompletionColumn {
+  name: string;
+  type: string;
+  comment?: string;
+}
+
+export interface CompletionTable {
+  name: string;
+  comment?: string;
+  columns: CompletionColumn[];
+}
+
+export interface CompletionSchemaIndex {
+  database: string;
+  schema?: string;
+  tables: CompletionTable[];
+  lastUpdated: number;
+}
+
+export type CompletionCacheStatus = 'idle' | 'loading' | 'ready' | 'error';
+
 export interface StorageVerificationResult {
   id: string;
   name: string;
@@ -41,6 +62,8 @@ export interface LlmProvider {
   model: string;
   apiKey?: string; // used for frontend transfer, not saved in sqlite
 }
+
+export type AppLanguage = 'zh-CN' | 'en-US';
 
 export interface ElectronAPI {
   // System and Window capabilities
@@ -67,6 +90,9 @@ export interface ElectronAPI {
     getSchemas: (id: string, database?: string) => Promise<string[]>;
     getTables: (id: string, database?: string, schema?: string) => Promise<string[]>;
     getColumns: (id: string, database?: string, schema?: string, table?: string) => Promise<{name: string, type: string}[]>;
+    buildSchemaIndex: (id: string, database?: string, schema?: string) => Promise<CompletionSchemaIndex | null>;
+    getSchemaIndex: (id: string, database?: string, schema?: string) => Promise<CompletionSchemaIndex | null>;
+    refreshSchemaIndex: (id: string, database?: string, schema?: string) => Promise<CompletionSchemaIndex | null>;
   };
   // Test interface
   system: {
@@ -79,6 +105,8 @@ export interface ElectronAPI {
     getApiKey: (provider: string) => Promise<string | null>;
     savePrivacyConsent: (consented: boolean) => Promise<void>;
     getPrivacyConsent: () => Promise<boolean>;
+    getAppLanguage: () => Promise<AppLanguage>;
+    setAppLanguage: (language: AppLanguage) => Promise<void>;
     getLlmProviders: () => Promise<LlmProvider[]>;
     saveLlmProviders: (providers: LlmProvider[]) => Promise<void>;
     getActiveLlmProvider: () => Promise<string | null>;

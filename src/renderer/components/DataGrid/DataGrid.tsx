@@ -1,15 +1,98 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { QueryResult } from '../../../shared/types';
+import { useI18n } from '../../i18n/I18nProvider';
 
 interface DataGridProps {
   result: QueryResult;
 }
 
+export const MIN_COLUMN_WIDTH = 100;
+
+const getDefaultColumnWidth = (column: string) =>
+  Math.max(column.length * 10 + 32, MIN_COLUMN_WIDTH);
+
+export const getInitialColumnWidths = (
+  columns: string[],
+  existingWidths: Record<string, number> = {}
+) =>
+  columns.reduce<Record<string, number>>((widths, column) => {
+    widths[column] = existingWidths[column] ?? getDefaultColumnWidth(column);
+    return widths;
+  }, {});
+
+export const resizeColumnWidth = (currentWidth: number, deltaX: number) =>
+  Math.max(MIN_COLUMN_WIDTH, currentWidth + deltaX);
+
+type ViewportSize = {
+  width: number;
+  height: number;
+};
+
+export const shouldRemeasureViewport = (
+  previous: ViewportSize | null,
+  next: ViewportSize
+) => {
+  if (next.width <= 0 || next.height <= 0) {
+    return false;
+  }
+
+  if (!previous) {
+    return true;
+  }
+
+  return previous.width !== next.width || previous.height !== next.height;
+};
+
 export const DataGrid: React.FC<DataGridProps> = ({ result }) => {
+  const { t } = useI18n();
   const parentRef = useRef<HTMLDivElement>(null);
+  const viewportSizeRef = useRef<ViewportSize | null>(null);
+  const resizeStateRef = useRef<{
+    column: string;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
 
   const { columns, rows } = result;
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() =>
+    getInitialColumnWidths(columns)
+  );
+
+  useEffect(() => {
+    setColumnWidths((currentWidths) => getInitialColumnWidths(columns, currentWidths));
+  }, [columns]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const resizeState = resizeStateRef.current;
+      if (!resizeState) {
+        return;
+      }
+
+      const nextWidth = resizeColumnWidth(
+        resizeState.startWidth,
+        event.clientX - resizeState.startX
+      );
+
+      setColumnWidths((currentWidths) => ({
+        ...currentWidths,
+        [resizeState.column]: nextWidth,
+      }));
+    };
+
+    const handlePointerUp = () => {
+      resizeStateRef.current = null;
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, []);
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
@@ -18,24 +101,86 @@ export const DataGrid: React.FC<DataGridProps> = ({ result }) => {
     overscan: 10,
   });
 
+  useEffect(() => {
+    const parent = parentRef.current;
+    if (!parent) {
+      return;
+    }
+
+    let frameId: number | null = null;
+
+    const readViewportSize = (): ViewportSize => ({
+      width: parent.clientWidth,
+      height: parent.clientHeight,
+    });
+
+    const syncViewport = () => {
+      const nextSize = readViewportSize();
+      const shouldMeasure = shouldRemeasureViewport(viewportSizeRef.current, nextSize);
+      viewportSizeRef.current = nextSize;
+
+      if (shouldMeasure) {
+        rowVirtualizer.measure();
+      }
+    };
+
+    const scheduleSync = () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        syncViewport();
+      });
+    };
+
+    scheduleSync();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', scheduleSync);
+
+      return () => {
+        if (frameId !== null) {
+          window.cancelAnimationFrame(frameId);
+        }
+
+        window.removeEventListener('resize', scheduleSync);
+      };
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      scheduleSync();
+    });
+
+    resizeObserver.observe(parent);
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      resizeObserver.disconnect();
+    };
+  }, [columns, rows.length, rowVirtualizer]);
+
   if (columns.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-gray-500">
-        No data to display.
+        {t('dataGrid.noData')}
       </div>
     );
   }
 
-  // Calculate rough column widths based on header length and some min width
-  const colWidths = columns.map((col) => Math.max(col.length * 10 + 32, 100));
+  const colWidths = columns.map((col) => columnWidths[col] ?? getDefaultColumnWidth(col));
   const totalWidth = colWidths.reduce((sum, w) => sum + w, 0) + 48; // 48 is for the # column
 
   return (
-    <div className="h-full w-full flex flex-col overflow-hidden border border-[#333333] rounded-sm bg-[#050505] font-mono text-[#a3a3a3]">
+    <div className="flex-1 min-h-0 w-full flex flex-col overflow-hidden border border-[#333333] rounded-sm bg-[#050505] font-mono text-[#a3a3a3]">
       {/* Scrollable Container */}
       <div
         ref={parentRef}
-        className="flex-auto overflow-auto relative custom-scrollbar"
+        className="flex-1 min-h-0 overflow-auto relative custom-scrollbar"
       >
         <div style={{ width: `${totalWidth}px`, minWidth: '100%' }}>
           {/* Sticky Header */}
@@ -49,11 +194,25 @@ export const DataGrid: React.FC<DataGridProps> = ({ result }) => {
             {columns.map((col, idx) => (
               <div
                 key={col}
-                className="flex-none px-4 py-2 border-r border-[#333333] truncate"
+                className="relative flex-none border-r border-[#333333] truncate"
                 style={{ width: colWidths[idx] }}
                 title={col}
               >
-                {col}
+                <div className="px-4 py-2 pr-5">{col}</div>
+                <button
+                  type="button"
+                  aria-label={`Resize ${col} column`}
+                  data-column-resize-handle={col}
+                  className="absolute top-0 right-0 h-full w-2 cursor-col-resize border-l border-[#333333] bg-[#121212] hover:bg-[#FF5722]/20"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    resizeStateRef.current = {
+                      column: col,
+                      startX: event.clientX,
+                      startWidth: colWidths[idx],
+                    };
+                  }}
+                />
               </div>
             ))}
           </div>
@@ -109,8 +268,8 @@ export const DataGrid: React.FC<DataGridProps> = ({ result }) => {
       
       {/* Footer */}
       <div className="bg-[#121212] border-t border-[#333333] px-4 py-1 flex-none text-xs text-[#00ff00] flex justify-between tracking-wider">
-        <span>{result.rowCount} ROWS</span>
-        <span>{result.durationMs} MS</span>
+        <span>{t('dataGrid.rows', { count: result.rowCount })}</span>
+        <span>{t('dataGrid.ms', { count: result.durationMs })}</span>
       </div>
     </div>
   );

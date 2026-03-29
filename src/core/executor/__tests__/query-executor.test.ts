@@ -31,6 +31,11 @@ describe('QueryExecutor', () => {
       expect(QueryExecutor.injectLimit(sql)).toBe('SELECT * FROM users LIMIT 10');
     });
 
+    it('should not inject LIMIT for mssql TOP queries', () => {
+      const sql = 'SELECT TOP 100 * FROM users';
+      expect(QueryExecutor.injectLimit(sql)).toBe(sql);
+    });
+
     it('should not inject LIMIT for INSERT queries', () => {
       const sql = 'INSERT INTO users (name) VALUES ("test")';
       expect(QueryExecutor.injectLimit(sql)).toBe(sql);

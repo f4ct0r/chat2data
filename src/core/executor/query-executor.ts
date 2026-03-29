@@ -20,8 +20,9 @@ export class QueryExecutor {
     // 仅适用于最外层没有 LIMIT 的情况
     const isSelect = /^select\s/i.test(trimmed);
     const hasLimit = /\blimit\s+\d+/i.test(trimmed);
+    const hasTop = /^select\s+top\s+\d+/i.test(trimmed);
 
-    if (isSelect && !hasLimit) {
+    if (isSelect && !hasLimit && !hasTop) {
       // 避免语句末尾带有分号时插入 LIMIT 导致语法错误
       if (trimmed.endsWith(';')) {
         return `${trimmed.slice(0, -1)} LIMIT 1000;`;

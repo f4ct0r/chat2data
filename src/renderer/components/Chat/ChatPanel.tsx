@@ -5,6 +5,7 @@ import { useTabStore } from '../../store/tabStore';
 import { ConnectionConfig, QueryResult } from '../../../shared/types';
 import DataGrid from '../DataGrid/DataGrid';
 import { emitGlobalError } from '../../utils/errorBus';
+import { useI18n } from '../../i18n/I18nProvider';
 
 const { Text } = Typography;
 
@@ -33,13 +34,14 @@ const getErrorMessage = (error: unknown) => {
 };
 
 const ChatPanel: React.FC<ChatPanelProps> = ({ tabId }) => {
+  const { t } = useI18n();
   const { tabs, addTab } = useTabStore();
   const tab = tabs.find((t) => t.id === tabId);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
       role: 'agent',
-      content: 'Hello! I am your database assistant. Ask me to write SQL queries for your database.',
+      content: t('chat.welcome'),
     }
   ]);
   const [inputValue, setInputValue] = useState('');
@@ -136,7 +138,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ tabId }) => {
         } catch (err) {
           queryError = getErrorMessage(err);
           emitGlobalError({
-            title: 'SQL Execution Error',
+            title: t('errors.sqlExecution'),
             message: queryError,
             type: 'sql_syntax',
           });
@@ -159,13 +161,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ tabId }) => {
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'agent',
-        content: `Agent failed to generate response: ${errorMessage}. This could be due to network issues, invalid API keys, or token limits.`,
+        content: t('chat.agentFailed', { error: errorMessage }),
         isGenerationError: true,
       }]);
 
       if (errorMessage.toLowerCase().includes('network') || errorMessage.toLowerCase().includes('fetch') || errorMessage.toLowerCase().includes('timeout')) {
         emitGlobalError({
-          title: 'Network Exception',
+          title: t('errors.network'),
           message: errorMessage,
           type: 'network',
         });
@@ -185,7 +187,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ tabId }) => {
   const handleExecuteSql = (sql: string) => {
     if (!tab?.connectionId) return;
     addTab({
-      title: `Query from Chat`,
+      title: t('chat.queryFromChat'),
       type: 'sql',
       connectionId: tab.connectionId,
       content: sql,
@@ -195,10 +197,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ tabId }) => {
   const handleSwitchToEditor = () => {
     if (!tab?.connectionId) return;
     addTab({
-      title: `Manual Query`,
+      title: t('chat.manualQuery'),
       type: 'sql',
       connectionId: tab.connectionId,
-      content: '-- Fallback: Write your manual SQL here\n',
+      content: t('chat.manualQueryTemplate'),
     });
   };
 
@@ -227,12 +229,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ tabId }) => {
                   <div className="bg-[#ff0000]/10 border border-[#ff0000]/30 shadow-[0_0_8px_rgba(255,0,0,0.3)] rounded-sm p-4 flex flex-col gap-3">
                     <div className="flex items-start gap-2 text-[#ff0000]">
                       <ExclamationCircleOutlined className="mt-1" />
-                      <Text strong className="!text-[#ff0000] tracking-wider">GENERATION FAILED</Text>
+                      <Text strong className="!text-[#ff0000] tracking-wider">{t('chat.generationFailed')}</Text>
                     </div>
                     <Text className="!text-[#ff0000]/80">{msg.content}</Text>
                     <div className="mt-2">
                       <Button danger onClick={handleSwitchToEditor} className="font-mono text-xs">
-                        [ SWITCH TO MANUAL SQL ]
+                        {t('chat.switchToManualSql')}
                       </Button>
                     </div>
                   </div>
@@ -256,17 +258,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ tabId }) => {
                     styles={{ body: { padding: 0 } }}
                     title={
                       <Space>
-                        <Text strong className="!text-[#a3a3a3] font-mono tracking-wider">GENERATED SQL</Text>
+                        <Text strong className="!text-[#a3a3a3] font-mono tracking-wider">{t('chat.generatedSql')}</Text>
                         {msg.riskLevel === 'ReadOnly' ? (
-                          <Tag color="green" className="font-mono bg-[#00ff00]/10 border-[#00ff00]/30 text-[#00ff00]">READ_ONLY</Tag>
+                          <Tag color="green" className="font-mono bg-[#00ff00]/10 border-[#00ff00]/30 text-[#00ff00]">{t('chat.risk.readOnly')}</Tag>
                         ) : msg.riskLevel === 'Dangerous' ? (
-                          <Tag color="red" className="font-mono bg-[#ff0000]/10 border-[#ff0000]/30 text-[#ff0000]">DANGEROUS</Tag>
+                          <Tag color="red" className="font-mono bg-[#ff0000]/10 border-[#ff0000]/30 text-[#ff0000]">{t('chat.risk.dangerous')}</Tag>
                         ) : null}
                       </Space>
                     }
                     extra={
                       <Space>
-                        <Tooltip title="Copy SQL">
+                        <Tooltip title={t('chat.copySql')}>
                           <Button 
                             type="text" 
                             icon={<CopyOutlined className="text-[#737373] hover:text-[#FF5722]" />} 
@@ -274,7 +276,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ tabId }) => {
                             onClick={() => navigator.clipboard.writeText(msg.sql || '')}
                           />
                         </Tooltip>
-                        <Tooltip title="Open in Editor">
+                        <Tooltip title={t('chat.openInEditor')}>
                           <Button 
                             type="primary" 
                             icon={<PlayCircleOutlined />} 
@@ -282,7 +284,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ tabId }) => {
                             className="font-mono text-xs"
                             onClick={() => handleExecuteSql(msg.sql!)}
                           >
-                            RUN
+                            {t('chat.run')}
                           </Button>
                         </Tooltip>
                       </Space>
@@ -317,7 +319,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ tabId }) => {
               </div>
               <div className="p-3 bg-[#121212] border border-[#333333] shadow-sm rounded-sm flex items-center gap-2">
                 <Spin size="small" />
-                <Text className="!text-[#00ff00] font-mono animate-pulse">&gt; processing request...</Text>
+                <Text className="!text-[#00ff00] font-mono animate-pulse">{t('chat.processing')}</Text>
               </div>
             </div>
           </div>
@@ -332,7 +334,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ tabId }) => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="> Enter command or SQL query..."
+            placeholder={t('chat.inputPlaceholder')}
             autoSize={{ minRows: 1, maxRows: 5 }}
             className="flex-1 font-mono bg-[#050505] text-[#00ff00] border-[#333333] focus:border-[#FF5722]"
             disabled={loading}
@@ -345,12 +347,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ tabId }) => {
             disabled={!inputValue.trim() || loading}
             className="h-auto px-6 font-mono tracking-wider"
           >
-            EXEC
+            {t('chat.exec')}
           </Button>
         </div>
         <div className="text-center mt-2">
           <Text className="text-xs !text-[#737373] font-mono">
-            &gt; SYSTEM READY. PRESS ENTER TO EXECUTE. SHIFT+ENTER FOR NEW LINE.
+            {t('chat.inputHint')}
           </Text>
         </div>
       </div>

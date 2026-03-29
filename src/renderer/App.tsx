@@ -6,11 +6,13 @@ import ConnectionListPanel from './components/ConnectionList/ConnectionListPanel
 import { PlusOutlined, SafetyCertificateOutlined, ApiOutlined, CodeOutlined, MessageOutlined } from '@ant-design/icons';
 import ObjectBrowser from './components/ObjectBrowser/ObjectBrowser';
 import SettingsModal from './components/Settings/SettingsModal';
-import { useTabStore } from './store/tabStore';
+import { getDefaultSchemaForDbType, useTabStore } from './store/tabStore';
 import WorkspaceTabs from './components/Tabs/WorkspaceTabs';
 import { SidebarView } from './components/Layout/Sidebar';
 import PrivacyConsentDialog from './components/Settings/PrivacyConsentDialog';
 import { emitGlobalError } from './utils/errorBus';
+import { useI18n } from './i18n/I18nProvider';
+import { resolvePreviewTarget, type TablePreviewRequest } from './features/table-preview';
 
 const { Title, Text } = Typography;
 
@@ -23,6 +25,7 @@ const getErrorMessage = (error: unknown) => {
 };
 
 const App: React.FC = () => {
+  const { t } = useI18n();
   const [pingResponse, setPingResponse] = useState<string>('');
   const [verifyResult, setVerifyResult] = useState<StorageVerificationResult[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
@@ -30,7 +33,7 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeView, setActiveView] = useState<SidebarView>('connections');
   
-  const { tabs, addTab, setActiveTab } = useTabStore();
+  const { tabs, activeTabId, addTab, setActiveTab, updateTab } = useTabStore();
 
   const handleSelectConnection = async (conn: ConnectionConfig | null) => {
     if (conn) {
@@ -41,7 +44,7 @@ const App: React.FC = () => {
       } catch (error) {
         console.error('Failed to connect:', error);
         emitGlobalError({
-          title: 'Database Connection Failed',
+          title: t('app.error.databaseConnectionFailed'),
           message: getErrorMessage(error),
           type: 'db_connection',
         });
@@ -65,7 +68,7 @@ const App: React.FC = () => {
       setPingResponse(response);
     } catch (error) {
       console.error('Ping failed:', error);
-      setPingResponse('Error: Failed to ping main process');
+      setPingResponse(t('app.error.pingFailed'));
     }
   };
 
@@ -73,7 +76,7 @@ const App: React.FC = () => {
     try {
       const config: ConnectionConfig = {
         id: '', // Empty string to let backend generate UUID
-        name: `Test DB ${Date.now()}`,
+        name: `${t('app.testConnectionName')} ${Date.now()}`,
         dbType: 'mysql',
         host: 'localhost',
         port: 3306,
@@ -100,9 +103,13 @@ const App: React.FC = () => {
   const handleOpenSqlTab = () => {
     if (selectedConnectionId && selectedConnection) {
       addTab({
-        title: `SQL - ${selectedConnection.name}`,
+        title: t('app.sqlTabTitle', { name: selectedConnection.name }),
         type: 'sql',
         connectionId: selectedConnectionId,
+        dbType: selectedConnection.dbType,
+        database: selectedConnection.database,
+        schema: getDefaultSchemaForDbType(selectedConnection.dbType, selectedConnection.database),
+        completionCacheStatus: 'idle',
       });
       setActiveView('connections');
     }
@@ -116,21 +123,57 @@ const App: React.FC = () => {
         setActiveTab(existingChatTab.id);
       } else {
         addTab({
-          title: `Chat - ${selectedConnection.name}`,
+          title: t('app.chatTabTitle', { name: selectedConnection.name }),
           type: 'chat',
           connectionId: selectedConnectionId,
+          dbType: selectedConnection.dbType,
+          database: selectedConnection.database,
+          schema: getDefaultSchemaForDbType(selectedConnection.dbType, selectedConnection.database),
         });
       }
       // Switch view to dashboard or connections to ensure tabs are visible
       setActiveView('connections');
     } else {
       emitGlobalError({
-        title: 'Action Required',
-        message: 'Please select a connection first to start a chat.',
+        title: t('app.error.actionRequired'),
+        message: t('app.error.selectConnectionFirst'),
         type: 'agent_error',
       });
       setActiveView('connections');
     }
+  };
+
+  const handlePreviewTable = (request: TablePreviewRequest) => {
+    if (!selectedConnection || selectedConnection.id !== request.connectionId) {
+      return;
+    }
+
+    const target = resolvePreviewTarget({
+      tabs,
+      activeTabId,
+      request,
+      selectedConnection,
+    });
+
+    const previewUpdates = {
+      content: target.sql,
+      database: request.database ?? selectedConnection.database,
+      schema: request.schema ?? getDefaultSchemaForDbType(selectedConnection.dbType, request.database ?? selectedConnection.database),
+      pendingPreviewSql: target.sql,
+      pendingPreviewRequestId: target.requestId,
+    };
+
+    if (target.createTab) {
+      addTab({
+        ...target.newTab,
+        ...previewUpdates,
+      });
+    } else {
+      updateTab(target.targetTabId, previewUpdates);
+      setActiveTab(target.targetTabId);
+    }
+
+    setActiveView('connections');
   };
 
   const renderDashboard = () => (
@@ -140,31 +183,31 @@ const App: React.FC = () => {
           <Title level={2} className="!mb-1 !text-[#FF5722] drop-shadow-[0_0_8px_rgba(255,87,34,0.6)] font-bold tracking-widest">
             CHAT2DATA WORKSPACE
           </Title>
-          <Text className="!text-[#a3a3a3]">Select a connection from the left panel to begin.</Text>
+          <Text className="!text-[#a3a3a3]">{t('app.dashboard.subtitle')}</Text>
         </header>
 
-        <Card title="Quick Actions" className="shadow-sm border-[#333333] bg-[#121212]">
+        <Card title={t('app.quickActions')} className="shadow-sm border-[#333333] bg-[#121212]">
           <Space wrap size="middle">
             <Button type="primary" icon={<ApiOutlined />} onClick={handlePing}>
-              Ping Main Process
+              {t('app.pingMainProcess')}
             </Button>
             <Button icon={<PlusOutlined />} onClick={handleCreateTestConnection} className="border-[#333333] text-[#a3a3a3] hover:text-[#FF5722] hover:border-[#FF5722]">
-              Create Test Connection
+              {t('app.createTestConnection')}
             </Button>
             <Button icon={<SafetyCertificateOutlined />} onClick={handleVerifyStorage} className="border-[#333333] text-[#a3a3a3] hover:text-[#FF5722] hover:border-[#FF5722]">
-              Verify Storage
+              {t('app.verifyStorage')}
             </Button>
           </Space>
         </Card>
 
         {pingResponse && (
           <Card size="small" className="bg-[#1a1a1a] border-[#00ff00]">
-            <Text className="!text-[#00ff00] drop-shadow-[0_0_5px_rgba(0,255,0,0.5)]">Response: {pingResponse}</Text>
+            <Text className="!text-[#00ff00] drop-shadow-[0_0_5px_rgba(0,255,0,0.5)]">{t('app.response')}: {pingResponse}</Text>
           </Card>
         )}
 
         {verifyResult.length > 0 && (
-          <Card title="Storage Verification Result" className="shadow-sm border-[#333333] bg-[#121212]">
+          <Card title={t('app.storageVerificationResult')} className="shadow-sm border-[#333333] bg-[#121212]">
             <pre className="bg-[#050505] p-4 rounded-lg overflow-x-auto text-sm border border-[#333333] text-[#00ff00]">
               {JSON.stringify(verifyResult, null, 2)}
             </pre>
@@ -173,15 +216,15 @@ const App: React.FC = () => {
 
         {selectedConnection && (
           <Card 
-            title={`Active Connection: ${selectedConnection.name}`} 
+            title={t('app.activeConnection', { name: selectedConnection.name })} 
             className="shadow-sm border-[#333333] bg-[#121212]"
             extra={
               <Space>
                 <Button type="primary" icon={<CodeOutlined />} onClick={handleOpenSqlTab}>
-                  New SQL Editor
+                  {t('app.newSqlEditor')}
                 </Button>
                 <Button icon={<MessageOutlined />} onClick={handleOpenChatTab} className="border-[#333333] text-[#a3a3a3] hover:text-[#FF5722] hover:border-[#FF5722]">
-                  New Chat Agent
+                  {t('app.newChatAgent')}
                 </Button>
               </Space>
             }
@@ -196,7 +239,7 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className="flex min-h-screen w-full overflow-hidden bg-[#0a0a0a] text-[#a3a3a3]">
+    <div className="flex h-screen w-full overflow-hidden bg-[#0a0a0a] text-[#a3a3a3]">
       <Layout 
         activeView={activeView}
         onViewChange={(view) => {
@@ -219,6 +262,7 @@ const App: React.FC = () => {
                   <ObjectBrowser 
                     connectionId={selectedConnectionId} 
                     connectionType={selectedConnection?.dbType} 
+                    onPreviewTable={handlePreviewTable}
                   />
                 </div>
               )}

@@ -3,6 +3,7 @@ import { Button, List, Tooltip, Typography, Space, Popconfirm } from 'antd';
 import { PlusOutlined, DatabaseOutlined, EditOutlined, DeleteOutlined, DisconnectOutlined } from '@ant-design/icons';
 import { ConnectionConfig } from '../../../shared/types';
 import ConnectionModal from './ConnectionModal';
+import { useI18n } from '../../i18n/I18nProvider';
 
 const { Text } = Typography;
 
@@ -12,6 +13,7 @@ interface ConnectionListPanelProps {
 }
 
 const ConnectionListPanel: React.FC<ConnectionListPanelProps> = ({ onSelect, selectedConnectionId }) => {
+  const { t } = useI18n();
   const [connections, setConnections] = useState<ConnectionConfig[]>([]);
   const [loading, setLoading] = useState(false);
   
@@ -73,8 +75,8 @@ const ConnectionListPanel: React.FC<ConnectionListPanelProps> = ({ onSelect, sel
   return (
     <div className="w-64 h-full bg-[#0a0a0a] border-r border-[#333333] flex flex-col">
       <div className="p-4 border-b border-[#333333] flex justify-between items-center bg-[#121212]">
-        <Text strong className="!text-[#FF5722] tracking-wider">CONNECTIONS</Text>
-        <Tooltip title="Add Connection">
+        <Text strong className="!text-[#FF5722] tracking-wider">{t('connectionList.title').toUpperCase()}</Text>
+        <Tooltip title={t('connectionList.add')}>
           <Button 
             type="text" 
             icon={<PlusOutlined className="text-[#a3a3a3] hover:text-[#FF5722]" />} 
@@ -114,7 +116,7 @@ const ConnectionListPanel: React.FC<ConnectionListPanelProps> = ({ onSelect, sel
                   </Space>
                   
                   <Space className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" size={4}>
-                    <Tooltip title="Edit">
+                    <Tooltip title={t('connectionList.edit')}>
                       <Button 
                         type="text" 
                         size="small" 
@@ -123,14 +125,14 @@ const ConnectionListPanel: React.FC<ConnectionListPanelProps> = ({ onSelect, sel
                       />
                     </Tooltip>
                     <Popconfirm
-                      title="Delete connection"
-                      description="Are you sure to delete this connection?"
+                      title={t('connectionList.deleteTitle')}
+                      description={t('connectionList.deleteDescription')}
                       onConfirm={(e) => e && handleDelete(item.id!, e as unknown as React.MouseEvent)}
                       onCancel={(e) => e?.stopPropagation()}
-                      okText="Yes"
-                      cancelText="No"
+                      okText={t('common.yes')}
+                      cancelText={t('common.no')}
                     >
-                      <Tooltip title="Delete">
+                      <Tooltip title={t('connectionList.delete')}>
                         <Button 
                           type="text" 
                           size="small" 
@@ -149,14 +151,14 @@ const ConnectionListPanel: React.FC<ConnectionListPanelProps> = ({ onSelect, sel
         {connections.length === 0 && !loading && (
           <div className="p-8 text-center flex flex-col items-center justify-center text-[#737373] h-full">
             <DisconnectOutlined className="text-4xl mb-4 text-[#333333]" />
-            <Text className="text-sm !text-[#737373]">No connections found</Text>
+            <Text className="text-sm !text-[#737373]">{t('connectionList.noConnections')}</Text>
             <Button 
               type="link" 
               onClick={handleAddClick} 
               className="mt-2 text-[#FF5722] hover:text-[#E64A19]"
               icon={<PlusOutlined />}
             >
-              Add Connection
+              {t('connectionList.add')}
             </Button>
           </div>
         )}

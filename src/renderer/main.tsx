@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { App as AntdApp, Button, Result, ConfigProvider, theme } from 'antd';
 import App from './App';
 import GlobalErrorPrompt from './components/GlobalErrorPrompt/GlobalErrorPrompt';
+import { I18nContext, I18nProvider } from './i18n/I18nProvider';
 import './index.css';
 
 const getErrorMessage = (error: unknown): string => {
@@ -39,6 +40,9 @@ interface RootErrorBoundaryState {
 }
 
 class RootErrorBoundary extends React.Component<RootErrorBoundaryProps, RootErrorBoundaryState> {
+  declare context: React.ContextType<typeof I18nContext>;
+  static contextType = I18nContext;
+
   public state: RootErrorBoundaryState = {
     error: null,
   };
@@ -53,15 +57,16 @@ class RootErrorBoundary extends React.Component<RootErrorBoundaryProps, RootErro
 
   public render(): React.ReactNode {
     if (this.state.error) {
+      const t = this.context?.t ?? ((value: string) => value);
       return (
-        <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] p-6 text-[#a3a3a3]">
+        <div className="flex h-screen items-center justify-center bg-[#0a0a0a] p-6 text-[#a3a3a3]">
           <Result
             status="error"
-            title={<span className="text-[#FF5722]">应用渲染失败</span>}
+            title={<span className="text-[#FF5722]">{t('root.renderFailed')}</span>}
             subTitle={<span className="text-[#a3a3a3]">{this.state.error.message}</span>}
             extra={
               <Button type="primary" onClick={() => window.location.reload()} className="font-mono">
-                [ 重新加载 ]
+                {t('root.reload')}
               </Button>
             }
           />
@@ -112,10 +117,12 @@ root.render(
       }}
     >
       <AntdApp>
-        <RootErrorBoundary>
-          <GlobalErrorPrompt />
-          <App />
-        </RootErrorBoundary>
+        <I18nProvider>
+          <RootErrorBoundary>
+            <GlobalErrorPrompt />
+            <App />
+          </RootErrorBoundary>
+        </I18nProvider>
       </AntdApp>
     </ConfigProvider>
   </React.StrictMode>

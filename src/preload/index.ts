@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IpcChannels } from '../shared/ipc-channels';
-import { ConnectionConfig, ElectronAPI, LlmProvider } from '../shared/types';
+import { AppLanguage, ConnectionConfig, ElectronAPI, LlmProvider } from '../shared/types';
 
 const api: ElectronAPI = {
   window: {
@@ -37,6 +37,12 @@ const api: ElectronAPI = {
       ipcRenderer.invoke(IpcChannels.DB_GET_TABLES, id, database, schema),
     getColumns: (id: string, database?: string, schema?: string, table?: string) => 
       ipcRenderer.invoke(IpcChannels.DB_GET_COLUMNS, id, database, schema, table),
+    buildSchemaIndex: (id: string, database?: string, schema?: string) =>
+      ipcRenderer.invoke(IpcChannels.DB_BUILD_SCHEMA_INDEX, id, database, schema),
+    getSchemaIndex: (id: string, database?: string, schema?: string) =>
+      ipcRenderer.invoke(IpcChannels.DB_GET_SCHEMA_INDEX, id, database, schema),
+    refreshSchemaIndex: (id: string, database?: string, schema?: string) =>
+      ipcRenderer.invoke(IpcChannels.DB_REFRESH_SCHEMA_INDEX, id, database, schema),
   },
   system: {
     ping: () => ipcRenderer.invoke(IpcChannels.SYSTEM_PING),
@@ -51,6 +57,10 @@ const api: ElectronAPI = {
       ipcRenderer.invoke(IpcChannels.SETTINGS_SAVE_PRIVACY_CONSENT, consented),
     getPrivacyConsent: () => 
       ipcRenderer.invoke(IpcChannels.SETTINGS_GET_PRIVACY_CONSENT),
+    getAppLanguage: () =>
+      ipcRenderer.invoke(IpcChannels.SETTINGS_GET_APP_LANGUAGE),
+    setAppLanguage: (language: AppLanguage) =>
+      ipcRenderer.invoke(IpcChannels.SETTINGS_SET_APP_LANGUAGE, language),
     getLlmProviders: () => 
       ipcRenderer.invoke(IpcChannels.SETTINGS_GET_LLM_PROVIDERS),
     saveLlmProviders: (providers: LlmProvider[]) => 

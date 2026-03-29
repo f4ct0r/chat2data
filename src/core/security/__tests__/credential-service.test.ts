@@ -177,4 +177,24 @@ describe('CredentialService', () => {
       expect(CredentialService.getPrivacyConsent()).toBe(false);
     });
   });
+
+  describe('App Language', () => {
+    it('saves the selected language', () => {
+      CredentialService.saveAppLanguage('en-US');
+      expect(sqliteService.setSetting).toHaveBeenCalledWith('app_language', 'en-US');
+    });
+
+    it('gets the saved language when it is supported', () => {
+      vi.mocked(sqliteService.getSetting).mockReturnValue('en-US');
+      expect(CredentialService.getAppLanguage()).toBe('en-US');
+    });
+
+    it('falls back to zh-CN when the saved language is missing or unsupported', () => {
+      vi.mocked(sqliteService.getSetting).mockReturnValue('fr-FR');
+      expect(CredentialService.getAppLanguage()).toBe('zh-CN');
+
+      vi.mocked(sqliteService.getSetting).mockReturnValue(null);
+      expect(CredentialService.getAppLanguage()).toBe('zh-CN');
+    });
+  });
 });

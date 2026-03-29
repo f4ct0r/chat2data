@@ -1,13 +1,37 @@
 import { create } from 'zustand';
+import { CompletionCacheStatus, ConnectionConfig } from '../../shared/types';
 
 export type TabType = 'sql' | 'chat';
+
+export const getDefaultSchemaForDbType = (
+  dbType: ConnectionConfig['dbType'],
+  database?: string
+): string | undefined => {
+  switch (dbType) {
+    case 'postgres':
+      return 'public';
+    case 'mssql':
+      return 'dbo';
+    case 'mysql':
+    case 'clickhouse':
+      return database;
+    default:
+      return undefined;
+  }
+};
 
 export interface TabData {
   id: string;
   title: string;
   type: TabType;
   connectionId: string;
+  dbType?: ConnectionConfig['dbType'];
   content?: string; // Optional content for the tab (e.g., SQL query text)
+  database?: string;
+  schema?: string;
+  completionCacheStatus?: CompletionCacheStatus;
+  pendingPreviewSql?: string;
+  pendingPreviewRequestId?: string;
 }
 
 interface TabState {

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { App } from 'antd';
 import { GlobalErrorPayload } from '../../utils/errorBus';
+import { useI18n } from '../../i18n/I18nProvider';
 
 const isBenignCancellation = (error: unknown): boolean => {
   if (!error) {
@@ -68,6 +69,7 @@ const getErrorMessage = (error: unknown): string => {
 };
 
 const GlobalErrorPrompt: React.FC = () => {
+  const { t } = useI18n();
   const { notification } = App.useApp();
 
   useEffect(() => {
@@ -90,14 +92,14 @@ const GlobalErrorPrompt: React.FC = () => {
       }
 
       const errorMsg = getErrorMessage(event.reason);
-      let title = 'Unhandled Error';
+      let title = t('errors.unhandled');
 
       if (errorMsg.toLowerCase().includes('network') || errorMsg.toLowerCase().includes('fetch')) {
-        title = 'Network Exception';
+        title = t('errors.network');
       } else if (errorMsg.toLowerCase().includes('syntax') || errorMsg.toLowerCase().includes('sql')) {
-        title = 'SQL Syntax Error';
+        title = t('errors.sqlSyntax');
       } else if (errorMsg.toLowerCase().includes('connect') || errorMsg.toLowerCase().includes('login') || errorMsg.toLowerCase().includes('econnrefused')) {
-        title = 'Database Connection Failed';
+        title = t('errors.dbConnection');
       }
 
       notification.error({
@@ -115,7 +117,7 @@ const GlobalErrorPrompt: React.FC = () => {
       window.removeEventListener('global-error', handleGlobalError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
-  }, [notification]);
+  }, [notification, t]);
 
   return null;
 };

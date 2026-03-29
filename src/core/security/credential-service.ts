@@ -1,5 +1,11 @@
+import { AppLanguage } from '../../shared/types';
 import { safeStorage } from 'electron';
 import { sqliteService } from '../storage/sqlite-service';
+
+const DEFAULT_APP_LANGUAGE: AppLanguage = 'zh-CN';
+
+const isSupportedLanguage = (value: string | null): value is AppLanguage =>
+  value === 'zh-CN' || value === 'en-US';
 
 export class CredentialService {
   /**
@@ -93,5 +99,14 @@ export class CredentialService {
   static getPrivacyConsent(): boolean {
     const val = sqliteService.getSetting('privacy_consented');
     return val === 'true';
+  }
+
+  static saveAppLanguage(language: AppLanguage): void {
+    sqliteService.setSetting('app_language', language);
+  }
+
+  static getAppLanguage(): AppLanguage {
+    const value = sqliteService.getSetting('app_language');
+    return isSupportedLanguage(value) ? value : DEFAULT_APP_LANGUAGE;
   }
 }

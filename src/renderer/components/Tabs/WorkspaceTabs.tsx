@@ -4,10 +4,12 @@ import { useTabStore } from '../../store/tabStore';
 import { CodeOutlined, MessageOutlined } from '@ant-design/icons';
 import SqlWorkspace from '../SqlWorkspace/SqlWorkspace';
 import ChatPanel from '../Chat/ChatPanel';
+import { useI18n } from '../../i18n/I18nProvider';
 
 type TargetKey = React.MouseEvent | React.KeyboardEvent | string;
 
 const WorkspaceTabs: React.FC = () => {
+  const { t } = useI18n();
   const { tabs, activeTabId, setActiveTab, closeTab, addTab } = useTabStore();
 
   useEffect(() => {
@@ -30,9 +32,13 @@ const WorkspaceTabs: React.FC = () => {
       const currentTab = tabs.find(t => t.id === activeTabId);
       if (currentTab) {
         addTab({
-          title: `New SQL`,
+          title: t('workspace.newSql'),
           type: 'sql',
           connectionId: currentTab.connectionId,
+          dbType: currentTab.dbType,
+          database: currentTab.database,
+          schema: currentTab.schema,
+          completionCacheStatus: 'idle',
         });
       }
     }
@@ -45,7 +51,7 @@ const WorkspaceTabs: React.FC = () => {
   if (tabs.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-[#737373] bg-[#0a0a0a]">
-        <p>No open tabs. Select a connection or click '+' to start.</p>
+        <p>{t('workspace.empty')}</p>
       </div>
     );
   }
@@ -60,7 +66,7 @@ const WorkspaceTabs: React.FC = () => {
       ),
       key: tab.id,
       children: (
-        <div className="h-full flex flex-col overflow-hidden bg-[#050505] rounded-b-sm border-x border-b border-[#333333] shadow-[0_0_10px_rgba(0,0,0,0.8)]">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-[#050505] rounded-b-sm border-x border-b border-[#333333] shadow-[0_0_10px_rgba(0,0,0,0.8)]">
           {tab.type === 'sql' ? (
             <SqlWorkspace tabId={tab.id} />
           ) : (
@@ -72,14 +78,14 @@ const WorkspaceTabs: React.FC = () => {
   });
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full min-h-0 flex flex-col">
       <Tabs
         type="editable-card"
         onChange={handleChange}
         activeKey={activeTabId || undefined}
         onEdit={handleEdit}
         items={tabItems}
-        className="h-full workspace-tabs"
+        className="h-full min-h-0 workspace-tabs"
       />
     </div>
   );

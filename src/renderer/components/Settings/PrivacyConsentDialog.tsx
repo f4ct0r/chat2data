@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Typography, Button } from 'antd';
 import { SafetyCertificateOutlined, CloudUploadOutlined, LockOutlined } from '@ant-design/icons';
+import { useI18n } from '../../i18n/I18nProvider';
 
 const { Title, Paragraph, Text } = Typography;
 
 const PrivacyConsentDialog: React.FC = () => {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -54,21 +56,21 @@ const PrivacyConsentDialog: React.FC = () => {
         <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
           <SafetyCertificateOutlined />
         </div>
-        <Title level={3}>隐私与数据安全说明</Title>
+        <Title level={3}>{t('privacy.title')}</Title>
       </div>
 
       <div className="space-y-6">
         <Paragraph>
-          欢迎使用 Chat2Data！在您使用我们的 AI 辅助查询功能（Agent 对话）之前，请了解我们是如何处理您的数据的。
+          {t('privacy.intro')}
         </Paragraph>
 
         <div className="bg-gray-50 p-4 rounded-lg space-y-4">
           <div className="flex gap-3">
             <CloudUploadOutlined className="text-xl text-blue-500 mt-1" />
             <div>
-              <Text strong className="block mb-1">会发送至云端的数据 (LLM)</Text>
+              <Text strong className="block mb-1">{t('privacy.cloudDataTitle')}</Text>
               <Text type="secondary">
-                为了生成准确的 SQL，我们仅会发送您的提问以及相关的<Text strong>表结构（表名、字段名、类型、注释）</Text>。
+                {t('privacy.cloudDataDescription')}
               </Text>
             </div>
           </div>
@@ -76,23 +78,23 @@ const PrivacyConsentDialog: React.FC = () => {
           <div className="flex gap-3">
             <LockOutlined className="text-xl text-green-500 mt-1" />
             <div>
-              <Text strong className="block mb-1">绝不发送的数据</Text>
+              <Text strong className="block mb-1">{t('privacy.localOnlyTitle')}</Text>
               <Text type="secondary">
-                我们<Text type="danger" strong>绝对不会</Text>将您的数据库连接密码、实际业务数据记录（如行内容）发送给任何第三方或云端。密码通过系统原生加密 (safeStorage) 仅保存在您的本地设备上。
+                {t('privacy.localOnlyDescription')}
               </Text>
             </div>
           </div>
         </div>
 
         <Paragraph className="text-sm text-gray-500">
-          点击“同意并继续”即表示您已知晓并同意上述数据处理方式。您可以随时在设置中配置您的 LLM API Key。
+          {t('privacy.footer')}
         </Paragraph>
       </div>
 
       <div className="flex justify-end gap-3 mt-8">
-        <Button onClick={handleDecline}>拒绝</Button>
+        <Button onClick={handleDecline}>{t('privacy.decline')}</Button>
         <Button type="primary" loading={loading} onClick={handleConsent}>
-          同意并继续
+          {t('privacy.accept')}
         </Button>
       </div>
     </Modal>

@@ -20,12 +20,17 @@ export enum IpcChannels {
   DB_GET_SCHEMAS = 'db:getSchemas',
   DB_GET_TABLES = 'db:getTables',
   DB_GET_COLUMNS = 'db:getColumns',
+  DB_BUILD_SCHEMA_INDEX = 'db:buildSchemaIndex',
+  DB_GET_SCHEMA_INDEX = 'db:getSchemaIndex',
+  DB_REFRESH_SCHEMA_INDEX = 'db:refreshSchemaIndex',
 
   // Settings & Security
   SETTINGS_SAVE_API_KEY = 'settings:saveApiKey',
   SETTINGS_GET_API_KEY = 'settings:getApiKey',
   SETTINGS_SAVE_PRIVACY_CONSENT = 'settings:savePrivacyConsent',
   SETTINGS_GET_PRIVACY_CONSENT = 'settings:getPrivacyConsent',
+  SETTINGS_GET_APP_LANGUAGE = 'settings:getAppLanguage',
+  SETTINGS_SET_APP_LANGUAGE = 'settings:setAppLanguage',
   SETTINGS_GET_LLM_PROVIDERS = 'settings:getLlmProviders',
   SETTINGS_SAVE_LLM_PROVIDERS = 'settings:saveLlmProviders',
   SETTINGS_GET_ACTIVE_LLM_PROVIDER = 'settings:getActiveLlmProvider',

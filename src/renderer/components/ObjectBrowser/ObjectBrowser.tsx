@@ -8,12 +8,15 @@ import {
   ProfileOutlined 
 } from '@ant-design/icons';
 import { ConnectionConfig } from '../../../shared/types';
+import { useI18n } from '../../i18n/I18nProvider';
+import type { TablePreviewRequest } from '../../features/table-preview';
 
 const { Text } = Typography;
 
 interface ObjectBrowserProps {
   connectionId: string | null;
   connectionType?: ConnectionConfig['dbType'];
+  onPreviewTable?: (request: TablePreviewRequest) => void;
 }
 
 type NodeType = 'root' | 'database' | 'schema' | 'table' | 'column';
@@ -29,14 +32,23 @@ interface BrowserNode {
   children?: BrowserNode[];
 }
 
-const ObjectBrowser: React.FC<ObjectBrowserProps> = ({ connectionId }) => {
+const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
+  connectionId,
+  connectionType,
+  onPreviewTable,
+}) => {
+  const { t } = useI18n();
   const [treeData, setTreeData] = useState<BrowserNode[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchRootNodes = async () => {
+  const fetchRootNodes = async (refreshCompletionSchema: boolean = false) => {
     if (!connectionId) return;
     setLoading(true);
     try {
+      if (refreshCompletionSchema) {
+        await window.api.db.refreshSchemaIndex(connectionId);
+      }
+
       // For some DBs we might want to start with databases, for others schemas
       const dbs = await window.api.db.getDatabases(connectionId);
       const rootNodes: BrowserNode[] = dbs.map(db => ({
@@ -169,7 +181,7 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({ connectionId }) => {
   if (!connectionId) {
     return (
       <div className="h-full flex items-center justify-center bg-[#0a0a0a]">
-        <Empty description={<span className="text-[#737373]">No connection selected</span>} />
+        <Empty description={<span className="text-[#737373]">{t('objectBrowser.noConnectionSelected')}</span>} />
       </div>
     );
   }
@@ -177,13 +189,15 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({ connectionId }) => {
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a] border-r border-[#333333]">
       <div className="p-3 border-b border-[#333333] flex justify-between items-center bg-[#121212]">
-        <Text strong className="!text-[#FF5722] tracking-wider text-xs">OBJECT BROWSER</Text>
-        <Tooltip title="Refresh">
+        <Text strong className="!text-[#FF5722] tracking-wider text-xs">{t('objectBrowser.title').toUpperCase()}</Text>
+        <Tooltip title={t('objectBrowser.refresh')}>
           <Button 
             type="text" 
             icon={<ReloadOutlined className="text-[#a3a3a3] hover:text-[#FF5722]" />} 
             size="small" 
-            onClick={fetchRootNodes}
+            onClick={() => {
+              void fetchRootNodes(true);
+            }}
             loading={loading}
           />
         </Tooltip>
@@ -200,6 +214,23 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({ connectionId }) => {
             treeData={treeData}
             showIcon
             blockNode
+            onDoubleClick={(_, nodeData) => {
+              const node = nodeData as BrowserNode;
+              if (
+                node.type === 'table' &&
+                connectionId &&
+                connectionType &&
+                node.table
+              ) {
+                onPreviewTable?.({
+                  connectionId,
+                  dbType: connectionType,
+                  database: node.database,
+                  schema: node.schema,
+                  table: node.table,
+                });
+              }
+            }}
             titleRender={(nodeData) => {
               const node = nodeData as BrowserNode;
               return (

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Select, InputNumber } from 'antd';
 import { ConnectionConfig } from '../../../shared/types';
+import { useI18n } from '../../i18n/I18nProvider';
 
 interface ConnectionModalProps {
   open: boolean;
@@ -10,6 +11,7 @@ interface ConnectionModalProps {
 }
 
 const ConnectionModal: React.FC<ConnectionModalProps> = ({ open, onCancel, onSave, initialValues }) => {
+  const { t } = useI18n();
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -55,10 +57,12 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ open, onCancel, onSav
 
   return (
     <Modal
-      title={initialValues ? "Edit Connection" : "Add Connection"}
+      title={initialValues ? t('connectionModal.editTitle') : t('connectionModal.addTitle')}
       open={open}
       onOk={handleOk}
       onCancel={onCancel}
+      okText={t('common.save')}
+      cancelText={t('common.cancel')}
       destroyOnClose
     >
       <Form
@@ -68,16 +72,16 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ open, onCancel, onSav
       >
         <Form.Item
           name="name"
-          label="Connection Name"
-          rules={[{ required: true, message: 'Please input the connection name!' }]}
+          label={t('connectionModal.name')}
+          rules={[{ required: true, message: t('connectionModal.nameRequired') }]}
         >
-          <Input placeholder="e.g. Production DB" />
+          <Input placeholder={t('connectionModal.namePlaceholder')} />
         </Form.Item>
 
         <Form.Item
           name="dbType"
-          label="Database Type"
-          rules={[{ required: true, message: 'Please select a database type!' }]}
+          label={t('connectionModal.dbType')}
+          rules={[{ required: true, message: t('connectionModal.dbTypeRequired') }]}
         >
           <Select onChange={handleDbTypeChange}>
             <Select.Option value="mysql">MySQL</Select.Option>
@@ -90,16 +94,16 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ open, onCancel, onSav
         <Form.Item style={{ marginBottom: 0 }}>
           <Form.Item
             name="host"
-            label="Host"
-            rules={[{ required: true, message: 'Please input host!' }]}
+            label={t('connectionModal.host')}
+            rules={[{ required: true, message: t('connectionModal.hostRequired') }]}
             style={{ display: 'inline-block', width: 'calc(70% - 8px)' }}
           >
             <Input placeholder="localhost" />
           </Form.Item>
           <Form.Item
             name="port"
-            label="Port"
-            rules={[{ required: true, message: 'Please input port!' }]}
+            label={t('connectionModal.port')}
+            rules={[{ required: true, message: t('connectionModal.portRequired') }]}
             style={{ display: 'inline-block', width: 'calc(30%)', margin: '0 0 0 8px' }}
           >
             <InputNumber style={{ width: '100%' }} />
@@ -108,24 +112,24 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ open, onCancel, onSav
 
         <Form.Item
           name="username"
-          label="Username"
-          rules={[{ required: true, message: 'Please input username!' }]}
+          label={t('connectionModal.username')}
+          rules={[{ required: true, message: t('connectionModal.usernameRequired') }]}
         >
           <Input placeholder="root" />
         </Form.Item>
 
         <Form.Item
           name="password"
-          label="Password"
+          label={t('connectionModal.password')}
         >
-          <Input.Password placeholder="Leave blank if unchanged (for edits)" />
+          <Input.Password placeholder={t('connectionModal.passwordPlaceholder')} />
         </Form.Item>
 
         <Form.Item
           name="database"
-          label="Database (Optional)"
+          label={t('connectionModal.database')}
         >
-          <Input placeholder="e.g. mydb" />
+          <Input placeholder={t('connectionModal.databasePlaceholder')} />
         </Form.Item>
       </Form>
     </Modal>

@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Modal, Form, Input, message, Tabs, Alert, Select, Button, Card, Popconfirm } from 'antd';
 import { KeyOutlined, SafetyCertificateOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
-import { LlmProvider } from '../../../shared/types';
+import { AppLanguage, LlmProvider } from '../../../shared/types';
+import { useI18n } from '../../i18n/I18nProvider';
 
 interface SettingsModalProps {
   open: boolean;
@@ -21,6 +22,7 @@ const normalizeProviders = (providers: Array<Partial<LlmProvider>> = []): LlmPro
   providers.map(ensureProviderId);
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
+  const { setLanguage, t } = useI18n();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [providers, setProviders] = useState<LlmProvider[]>([]);
@@ -28,6 +30,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   const loadSettings = useCallback(async () => {
     setLoading(true);
     try {
+      const appLanguage = await window.api.settings.getAppLanguage();
       const loadedProviders = normalizeProviders(await window.api.settings.getLlmProviders());
       const activeId = await window.api.settings.getActiveLlmProvider();
       const resolvedActiveId = loadedProviders.some((provider) => provider.id === activeId)
@@ -36,16 +39,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
       
       setProviders(loadedProviders);
       form.setFieldsValue({
+        language: appLanguage,
         activeProviderId: resolvedActiveId,
         providers: loadedProviders,
       });
     } catch (error) {
       console.error('Failed to load settings', error);
-      message.error('加载设置失败');
+      message.error(t('settings.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [form]);
+  }, [form, t]);
 
   useEffect(() => {
     if (open) {
@@ -57,45 +61,62 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     try {
       const values = await form.validateFields();
       setLoading(true);
+      const selectedLanguage = values.language as AppLanguage;
 
       const normalizedProviders = normalizeProviders(values.providers || []);
       const activeProviderId = normalizedProviders.some((provider) => provider.id === values.activeProviderId)
         ? values.activeProviderId
         : normalizedProviders[0]?.id;
 
+      await window.api.settings.setAppLanguage(selectedLanguage);
       await window.api.settings.saveLlmProviders(normalizedProviders);
       if (activeProviderId) {
         await window.api.settings.setActiveLlmProvider(activeProviderId);
       }
+      await setLanguage(selectedLanguage, false);
 
       setProviders(normalizedProviders);
       form.setFieldsValue({
+        language: selectedLanguage,
         activeProviderId,
         providers: normalizedProviders,
       });
-      message.success('设置保存成功');
+      message.success(t('settings.saveSuccess'));
       onClose();
     } catch (error) {
       console.error('Failed to save settings', error);
-      message.error(error instanceof Error ? error.message : '保存设置失败');
+      message.error(error instanceof Error ? error.message : t('settings.saveFailed'));
     } finally {
       setLoading(false);
     }
   };
 
+  const generalSettings = (
+    <div className="py-4 h-[500px] overflow-y-auto">
+      <Form form={form} layout="vertical">
+        <Form.Item label={t('settings.language.label')} name="language">
+          <Select placeholder={t('settings.language.placeholder')}>
+            <Select.Option value="zh-CN">{t('settings.language.zh-CN')}</Select.Option>
+            <Select.Option value="en-US">{t('settings.language.en-US')}</Select.Option>
+          </Select>
+        </Form.Item>
+      </Form>
+    </div>
+  );
+
   const llmSettings = (
     <div className="py-4 h-[500px] overflow-y-auto">
       <Alert
-        message="API Key 安全说明"
-        description="您的 API Key 使用系统级安全存储 (safeStorage) 加密保存在本地，绝不会上传到任何第三方服务器。留空表示不修改已有 Key。"
+        message={t('settings.llmSecurityTitle')}
+        description={t('settings.llmSecurityDescription')}
         type="info"
         showIcon
         icon={<SafetyCertificateOutlined />}
         className="mb-6"
       />
       <Form form={form} layout="vertical">
-        <Form.Item label="当前默认使用的模型提供商" name="activeProviderId">
-          <Select placeholder="请选择提供商">
+        <Form.Item label={t('settings.activeProvider')} name="activeProviderId">
+          <Select placeholder={t('settings.selectProvider')}>
             {providers.map(p => (
               <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>
             ))}
@@ -103,7 +124,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
         </Form.Item>
 
         <div className="mb-2 flex justify-between items-center">
-          <h3 className="text-lg font-medium">提供商列表</h3>
+          <h3 className="text-lg font-medium">{t('settings.providerList')}</h3>
         </div>
 
         <Form.List name="providers">
@@ -116,7 +137,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                   className="bg-[#050505] border-[#333333]"
                   extra={
                     <Popconfirm
-                      title="确定要删除这个提供商吗？"
+                      title={t('settings.deleteProviderConfirm')}
                       onConfirm={() => {
                         remove(field.name);
                         const currentProviders = normalizeProviders(form.getFieldValue('providers') || []);
@@ -128,8 +149,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                   }
                 >
                   <Form.Item
-                    {...field}
-                    label="提供商 ID"
+                    label={t('settings.providerId')}
                     name={[field.name, 'id']}
                     hidden
                   >
@@ -137,52 +157,47 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                   </Form.Item>
                   <div className="grid grid-cols-2 gap-4">
                     <Form.Item
-                      {...field}
-                      label="名称"
+                      label={t('settings.providerName')}
                       name={[field.name, 'name']}
-                      rules={[{ required: true, message: '请输入名称' }]}
+                      rules={[{ required: true, message: t('settings.providerNameRequired') }]}
                     >
-                      <Input placeholder="例如：我的 OpenAI" onChange={() => setProviders(form.getFieldValue('providers'))} />
+                      <Input placeholder={t('settings.providerNamePlaceholder')} onChange={() => setProviders(form.getFieldValue('providers'))} />
                     </Form.Item>
 
                     <Form.Item
-                      {...field}
-                      label="类型"
+                      label={t('settings.providerType')}
                       name={[field.name, 'provider']}
-                      rules={[{ required: true, message: '请选择类型' }]}
+                      rules={[{ required: true, message: t('settings.providerTypeRequired') }]}
                     >
                       <Select>
-                        <Select.Option value="openai">OpenAI 兼容</Select.Option>
-                        <Select.Option value="anthropic">Anthropic</Select.Option>
+                        <Select.Option value="openai">{t('settings.providerType.openai')}</Select.Option>
+                        <Select.Option value="anthropic">{t('settings.providerType.anthropic')}</Select.Option>
                       </Select>
                     </Form.Item>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <Form.Item
-                      {...field}
-                      label="Base URL (可选)"
+                      label={t('settings.baseUrl')}
                       name={[field.name, 'baseUrl']}
-                      tooltip="如果为空，将使用默认的官方 API 地址"
+                      tooltip={t('settings.baseUrlTooltip')}
                     >
                       <Input placeholder="https://api.openai.com/v1" />
                     </Form.Item>
 
                     <Form.Item
-                      {...field}
-                      label="模型名称"
+                      label={t('settings.modelName')}
                       name={[field.name, 'model']}
-                      rules={[{ required: true, message: '请输入模型名称' }]}
+                      rules={[{ required: true, message: t('settings.modelNameRequired') }]}
                     >
-                      <Input placeholder="例如：gpt-4o-mini 或 claude-3-haiku" />
+                      <Input placeholder={t('settings.modelNamePlaceholder')} />
                     </Form.Item>
                   </div>
 
                   <Form.Item
-                    {...field}
-                    label="API Key"
+                    label={t('settings.apiKey')}
                     name={[field.name, 'apiKey']}
-                    tooltip="保存在本地安全存储中。若已有值会显示 ********，再次输入将覆盖。"
+                    tooltip={t('settings.apiKeyTooltip')}
                   >
                     <Input.Password 
                       prefix={<KeyOutlined className="text-gray-400" />} 
@@ -197,7 +212,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                 type="dashed" 
                 onClick={() => {
                   const nextProvider = ensureProviderId({
-                    name: 'New Provider',
+                    name: t('settings.newProviderName'),
                     provider: 'openai',
                     model: 'gpt-4o-mini',
                   });
@@ -211,7 +226,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                 block 
                 icon={<PlusOutlined />}
               >
-                添加模型提供商
+                {t('settings.addProvider')}
               </Button>
             </div>
           )}
@@ -222,21 +237,26 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
 
   const items = [
     {
+      key: 'general',
+      label: t('settings.tab.general'),
+      children: generalSettings,
+    },
+    {
       key: 'llm',
-      label: 'LLM 设置',
+      label: t('settings.tab.llm'),
       children: llmSettings,
     },
   ];
 
   return (
     <Modal
-      title="系统设置"
+      title={t('settings.title')}
       open={open}
       onCancel={onClose}
       onOk={handleSave}
       confirmLoading={loading}
-      okText="保存"
-      cancelText="取消"
+      okText={t('common.save')}
+      cancelText={t('common.cancel')}
       width={700}
       destroyOnClose
     >

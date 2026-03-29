@@ -1,87 +1,83 @@
 import './monaco-bootstrap';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import Editor, { OnMount, useMonaco } from '@monaco-editor/react';
 import { SqlExecutionTarget } from './sql-execution';
+import { ConnectionConfig } from '../../../shared/types';
+import {
+  clearSqlCompletionContext,
+  registerSqlCompletionProvider,
+  setSqlCompletionContext,
+} from './sql-completion-provider';
 
 interface SqlEditorProps {
   value: string;
   onChange: (value: string | undefined) => void;
   onExecute?: () => void;
   onExecutionTargetChange?: (target: SqlExecutionTarget) => void;
+  connectionId?: string;
+  dbType?: ConnectionConfig['dbType'];
+  database?: string;
+  schema?: string;
   language?: string;
   theme?: string;
   height?: string;
 }
-
-let sqlCompletionProviderRegistered = false;
 
 export const SqlEditor: React.FC<SqlEditorProps> = ({
   value,
   onChange,
   onExecute,
   onExecutionTargetChange,
+  connectionId,
+  dbType,
+  database,
+  schema,
   language = 'sql',
   theme = 'hc-black',
   height = '100%',
 }) => {
   const monaco = useMonaco();
+  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
   useEffect(() => {
-    if (monaco && !sqlCompletionProviderRegistered) {
-      sqlCompletionProviderRegistered = true;
-      // You can configure Monaco editor settings here, 
-      // like registering custom completion providers or themes
-      monaco.languages.registerCompletionItemProvider('sql', {
-        provideCompletionItems: () => {
-          const suggestions = [
-            {
-              label: 'SELECT',
-              kind: monaco.languages.CompletionItemKind.Keyword,
-              insertText: 'SELECT ',
-            },
-            {
-              label: 'FROM',
-              kind: monaco.languages.CompletionItemKind.Keyword,
-              insertText: 'FROM ',
-            },
-            {
-              label: 'WHERE',
-              kind: monaco.languages.CompletionItemKind.Keyword,
-              insertText: 'WHERE ',
-            },
-            {
-              label: 'JOIN',
-              kind: monaco.languages.CompletionItemKind.Keyword,
-              insertText: 'JOIN ',
-            },
-            {
-              label: 'GROUP BY',
-              kind: monaco.languages.CompletionItemKind.Keyword,
-              insertText: 'GROUP BY ',
-            },
-            {
-              label: 'ORDER BY',
-              kind: monaco.languages.CompletionItemKind.Keyword,
-              insertText: 'ORDER BY ',
-            },
-            {
-              label: 'LIMIT',
-              kind: monaco.languages.CompletionItemKind.Keyword,
-              insertText: 'LIMIT ',
-            },
-          ];
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          return { suggestions: suggestions as any };
-        },
-      });
+    if (monaco) {
+      registerSqlCompletionProvider(monaco);
     }
   }, [monaco]);
+
+  useEffect(() => {
+    const model = editorRef.current?.getModel();
+    if (!model || !connectionId || !dbType) {
+      return;
+    }
+
+    setSqlCompletionContext(model.uri.toString(), {
+      connectionId,
+      dbType,
+      database,
+      schema,
+    });
+
+    return () => {
+      clearSqlCompletionContext(model.uri.toString());
+    };
+  }, [connectionId, dbType, database, schema]);
 
   const handleEditorChange = (value: string | undefined) => {
     onChange(value);
   };
 
   const handleEditorDidMount: OnMount = (editor, monacoInstance) => {
+    editorRef.current = editor;
+    if (connectionId && dbType) {
+      setSqlCompletionContext(editor.getModel()!.uri.toString(), {
+        connectionId,
+        dbType,
+        database,
+        schema,
+      });
+    }
+
     const emitExecutionTarget = () => {
       const selection = editor.getSelection();
 
@@ -115,6 +111,15 @@ export const SqlEditor: React.FC<SqlEditorProps> = ({
       });
     }
   };
+
+  useEffect(() => {
+    return () => {
+      const model = editorRef.current?.getModel();
+      if (model) {
+        clearSqlCompletionContext(model.uri.toString());
+      }
+    };
+  }, []);
 
   return (
     <div className="flex-1 w-full border border-[#333333] rounded-sm overflow-hidden bg-[#000000] relative min-h-0 flex flex-col">
