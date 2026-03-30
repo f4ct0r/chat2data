@@ -1,6 +1,75 @@
 import { Client } from 'pg';
 import { DatabaseDriver, QueryResult } from '../types';
-import { DecryptedConnectionConfig } from '../../../shared/types';
+import {
+  BatchExecutionResult,
+  DecryptedConnectionConfig,
+  PreviewTableRef,
+  TableEditMetadata,
+} from '../../../shared/types';
+
+type PostgresConstraintRow = {
+  constraint_name?: string;
+  constraint_type?: string;
+  column_name?: string;
+  ordinal_position?: number;
+};
+
+const POSTGRES_UNEDITABLE_REASON = 'Table preview is read-only because no primary key or unique key was found.';
+
+const pickPostgresKey = (rows: PostgresConstraintRow[]): TableEditMetadata['key'] => {
+  const sorted = rows
+    .map((row) => ({
+      constraintName: row.constraint_name ?? '',
+      constraintType: row.constraint_type ?? '',
+      columnName: row.column_name ?? '',
+      ordinalPosition: Number(row.ordinal_position ?? 0),
+    }))
+    .sort((left, right) => {
+      const leftPriority = left.constraintType === 'PRIMARY KEY' ? 0 : 1;
+      const rightPriority = right.constraintType === 'PRIMARY KEY' ? 0 : 1;
+      return leftPriority - rightPriority
+        || left.constraintName.localeCompare(right.constraintName)
+        || left.ordinalPosition - right.ordinalPosition;
+    });
+
+  const groups = new Map<string, { type: 'primary' | 'unique'; columns: string[] }>();
+
+  for (const row of sorted) {
+    if (!row.constraintName || !row.columnName) {
+      continue;
+    }
+
+    const type = row.constraintType === 'PRIMARY KEY' ? 'primary' : row.constraintType === 'UNIQUE' ? 'unique' : null;
+    if (!type) {
+      continue;
+    }
+
+    const existing = groups.get(row.constraintName);
+    if (existing) {
+      existing.columns.push(row.columnName);
+      continue;
+    }
+
+    groups.set(row.constraintName, {
+      type,
+      columns: [row.columnName],
+    });
+  }
+
+  for (const group of groups.values()) {
+    if (group.type === 'primary') {
+      return group;
+    }
+  }
+
+  for (const group of groups.values()) {
+    if (group.type === 'unique') {
+      return group;
+    }
+  }
+
+  return null;
+};
 
 export class PostgresAdapter implements DatabaseDriver {
   private client: Client | null = null;
@@ -126,6 +195,75 @@ export class PostgresAdapter implements DatabaseDriver {
       name: row.column_name,
       type: row.data_type,
     }));
+  }
+
+  async getTableEditMetadata(table: PreviewTableRef): Promise<TableEditMetadata> {
+    if (!this.client) {
+      throw new Error('Not connected');
+    }
+
+    const targetSchema = table.schema || 'public';
+    const result = await this.client.query(
+      `
+        SELECT
+          tc.constraint_name,
+          tc.constraint_type,
+          kcu.column_name,
+          kcu.ordinal_position
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_schema = kcu.constraint_schema
+         AND tc.table_name = kcu.table_name
+         AND tc.constraint_name = kcu.constraint_name
+        WHERE tc.table_schema = $1
+          AND tc.table_name = $2
+          AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+      `,
+      [targetSchema, table.table]
+    );
+
+    const key = pickPostgresKey(result.rows as PostgresConstraintRow[]);
+    if (!key) {
+      return {
+        editable: false,
+        reason: POSTGRES_UNEDITABLE_REASON,
+        key: null,
+      };
+    }
+
+    return {
+      editable: true,
+      key,
+    };
+  }
+
+  async executeBatch(statements: string[]): Promise<BatchExecutionResult> {
+    if (!this.client) {
+      throw new Error('Not connected');
+    }
+
+    if (statements.length === 0) {
+      return { ok: true };
+    }
+
+    await this.client.query('BEGIN');
+
+    for (const [index, statement] of statements.entries()) {
+      try {
+        await this.client.query(statement);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (error: any) {
+        await this.client.query('ROLLBACK');
+        return {
+          ok: false,
+          failedStatementIndex: index,
+          error: error.message || String(error),
+        };
+      }
+    }
+
+    await this.client.query('COMMIT');
+    return { ok: true };
   }
 
   async killQuery(): Promise<void> {

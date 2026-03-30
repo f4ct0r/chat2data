@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClickhouseAdapter } from '../adapters/clickhouse';
+import { DatabaseDriver } from '../types';
 
 const queryMock = vi.fn();
 const commandMock = vi.fn();
@@ -16,12 +17,13 @@ vi.mock('@clickhouse/client', () => ({
 }));
 
 describe('ClickhouseAdapter', () => {
-  const adapter = new ClickhouseAdapter();
+  let adapter: DatabaseDriver;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     pingMock.mockResolvedValue(undefined);
     closeMock.mockResolvedValue(undefined);
+    adapter = new ClickhouseAdapter();
 
     await adapter.connect({
       id: 'conn-1',
@@ -77,6 +79,36 @@ describe('ClickhouseAdapter', () => {
       columns: ['id', 'name'],
       rows: [{ id: 1, name: 'alice' }],
       rowCount: 1,
+    });
+  });
+
+  it('returns read-only edit metadata for table previews', async () => {
+    const result = await adapter.getTableEditMetadata?.({
+      dbType: 'clickhouse',
+      database: 'default',
+      table: 'events',
+      previewSql: 'SELECT * FROM events LIMIT 100',
+    });
+
+    expect(result).toEqual({
+      editable: false,
+      reason: expect.stringContaining('ClickHouse'),
+      key: null,
+    });
+  });
+
+  it('rejects batch writes without attempting transactional execution', async () => {
+    const result = await adapter.executeBatch?.([
+      "ALTER TABLE events UPDATE name = 'alice' WHERE id = 1",
+      'ALTER TABLE events DELETE WHERE id = 2',
+    ]);
+
+    expect(queryMock).not.toHaveBeenCalled();
+    expect(commandMock).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      failedStatementIndex: 0,
+      error: expect.stringContaining('ClickHouse'),
     });
   });
 });
