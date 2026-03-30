@@ -24,6 +24,12 @@
   Attach preview table identity and refresh SQL to reused/new SQL tabs.
 - Test: `src/renderer/features/table-preview.test.ts`
   Assert preview targets include stable table metadata for refresh and editing.
+- Modify: `src/renderer/App.tsx`
+  Preserve preview metadata when reusing an existing SQL tab for table preview.
+- Create: `src/renderer/features/preview-updates.ts`
+  Centralize preview-update payload construction so reused/new-tab flows stay in sync.
+- Test: `src/renderer/App.preview-updates.test.ts`
+  Cover the reused-tab update path that must retain `previewTable`.
 - Create: `src/renderer/features/table-edit-buffer.ts`
   Pure row-buffer logic: row identity, repeated edits, delete markers, pending counts.
 - Test: `src/renderer/features/table-edit-buffer.test.ts`
@@ -82,8 +88,11 @@
 - Modify: `src/shared/ipc-channels.ts`
 - Modify: `src/renderer/store/tabStore.ts`
 - Modify: `src/renderer/features/table-preview.ts`
+- Modify: `src/renderer/App.tsx`
+- Create: `src/renderer/features/preview-updates.ts`
 - Test: `src/renderer/store/tabStore.test.ts`
 - Test: `src/renderer/features/table-preview.test.ts`
+- Test: `src/renderer/App.preview-updates.test.ts`
 
 - [ ] **Step 1: Write the failing preview metadata tests**
 
@@ -107,13 +116,26 @@ expect(tab).toMatchObject({
     previewSql: 'SELECT * FROM "analytics"."public"."users" LIMIT 100',
   },
 });
+
+expect(
+  buildPreviewUpdates({
+    target: reusedSqlTarget,
+    request: baseRequest,
+    selectedConnection,
+  })
+).toMatchObject({
+  previewTable: {
+    table: 'users',
+    previewSql: 'SELECT * FROM "analytics"."public"."users" LIMIT 100',
+  },
+});
 ```
 
 - [ ] **Step 2: Run the focused tests to verify they fail**
 
-Run: `npm test -- src/renderer/features/table-preview.test.ts src/renderer/store/tabStore.test.ts`
+Run: `npm test -- src/renderer/features/table-preview.test.ts src/renderer/store/tabStore.test.ts src/renderer/App.preview-updates.test.ts`
 
-Expected: FAIL with missing `previewTable` fields on `TabData` or `ResolvedPreviewTarget`.
+Expected: FAIL with missing `previewTable` fields on `TabData` or `ResolvedPreviewTarget`, and reused-tab preview updates not preserving `previewTable`.
 
 - [ ] **Step 3: Add the shared contracts and wire preview metadata through the tab model**
 
@@ -148,24 +170,26 @@ Implementation notes:
 
 - extend `TabData` with `previewTable?: PreviewTableRef`
 - have `resolvePreviewTarget(...)` populate `previewTable.previewSql` for both reused and new SQL tabs
+- keep `src/renderer/App.tsx` in sync by routing preview-update payload construction through a focused helper such as `src/renderer/features/preview-updates.ts`
 - add IPC channel constants now so later tasks can wire the new methods without reopening the shared contract
 
 - [ ] **Step 4: Run the focused tests to verify they pass**
 
-Run: `npm test -- src/renderer/features/table-preview.test.ts src/renderer/store/tabStore.test.ts`
+Run: `npm test -- src/renderer/features/table-preview.test.ts src/renderer/store/tabStore.test.ts src/renderer/App.preview-updates.test.ts`
 
 Expected: PASS
 
 - [ ] **Step 5: Commit the shared-contracts slice**
 
 ```bash
-git add src/shared/types.ts src/shared/ipc-channels.ts src/renderer/store/tabStore.ts src/renderer/store/tabStore.test.ts src/renderer/features/table-preview.ts src/renderer/features/table-preview.test.ts
+git add src/shared/types.ts src/shared/ipc-channels.ts src/renderer/store/tabStore.ts src/renderer/store/tabStore.test.ts src/renderer/features/table-preview.ts src/renderer/features/table-preview.test.ts src/renderer/App.tsx src/renderer/features/preview-updates.ts src/renderer/App.preview-updates.test.ts
 git commit -m "feat: add editable preview tab metadata"
 ```
 
 ## Task 2: Core Contracts, IPC, And Connection Manager Entry Points
 
 **Files:**
+- Modify: `src/shared/types.ts`
 - Modify: `src/core/db/types.ts`
 - Modify: `src/core/db/connection-manager.ts`
 - Modify: `src/preload/index.ts`
@@ -216,6 +240,7 @@ public async getTableEditMetadata(id: string, table: PreviewTableRef) {
 
 Implementation notes:
 
+- update `ElectronAPI` in `src/shared/types.ts` so the new preload methods remain type-safe
 - add `window.api.db.getTableEditMetadata(...)`
 - add `window.api.db.executeBatch(...)`
 - register `ipcMain.handle(...)` handlers in `src/main/main.ts`
@@ -230,7 +255,7 @@ Expected: PASS
 - [ ] **Step 5: Commit the core-entry-point slice**
 
 ```bash
-git add src/core/db/types.ts src/core/db/connection-manager.ts src/core/db/__tests__/connection-manager.test.ts src/preload/index.ts src/main/main.ts
+git add src/shared/types.ts src/core/db/types.ts src/core/db/connection-manager.ts src/core/db/__tests__/connection-manager.test.ts src/preload/index.ts src/main/main.ts
 git commit -m "feat: add editable preview db entry points"
 ```
 
@@ -376,6 +401,11 @@ expect(buildTableEditSql(session, metadata)).toEqual({
   ],
   previewSql: 'UPDATE ...;\n\nDELETE ...;',
 });
+
+expect(serializeSqlLiteral('postgres', { bad: true })).toEqual({
+  ok: false,
+  reason: 'Unsupported value type for editable preview.',
+});
 ```
 
 - [ ] **Step 2: Run the focused pure-logic tests to verify they fail**
@@ -415,7 +445,10 @@ Implementation notes:
 - repeated edits to the same cell collapse to the final pending value
 - deleted rows suppress pending `UPDATE` statements
 - serialize `null` as `NULL`
+- support only scalar literals in v1: string, number, boolean, and `null`
+- treat unsupported values such as objects, arrays, and binary/blob-like payloads as non-serializable and return a structured failure the UI can use to keep the grid read-only or reject the edit
 - quote identifiers using the same db-type-specific style as `src/renderer/features/table-preview.ts`
+- add tests for both supported scalar serialization and unsupported-value rejection
 
 - [ ] **Step 4: Run the focused pure-logic tests to verify they pass**
 
@@ -550,6 +583,17 @@ expect(getPostApplyNotice({
 
 expect(markup).toContain('editable-preview-shell');
 expect(markup).toContain('editable-preview-readonly-reason');
+
+expect(getEditablePreviewViewState({
+  previewTable,
+  editMetadata: { editable: false, reason: 'No primary key.', key: null },
+  pendingChangeCount: 0,
+  isApplying: false,
+})).toEqual({
+  mode: 'read-only',
+  readOnlyReason: 'No primary key.',
+  showToolbar: false,
+});
 ```
 
 - [ ] **Step 2: Run the focused workspace tests to verify they fail**
