@@ -45,8 +45,28 @@ export type GridDeleteAction =
       cell: GridCellSelection;
     }
   | {
-      type: 'none';
+  type: 'none';
     };
+
+export interface GridSelectionRequestResult {
+  selection: GridSelectionState;
+  shouldFocusGrid: boolean;
+}
+
+export interface GridEditStartRequestResult {
+  cell: GridCellSelection | null;
+  shouldFocusGrid: boolean;
+}
+
+export interface GridDeleteKeyboardInteractionResult {
+  action: GridDeleteAction;
+  shouldPreventDefault: boolean;
+}
+
+export interface ResolveGridDeleteKeyboardInteractionInput
+  extends ResolveGridDeleteActionInput {
+  canHandleDeleteAction: boolean;
+}
 
 const isMacPlatform = (platform: string) => /mac/i.test(platform);
 
@@ -137,6 +157,40 @@ export const resolveGridCellSelection = ({
     selectedRowIds: [],
     selectedCell: cell,
     anchorRowId: cell.rowId,
+  };
+};
+
+export const resolveGridRowSelectionRequest = (
+  input: ResolveGridRowSelectionInput
+): GridSelectionRequestResult => ({
+  selection: resolveGridRowSelection(input),
+  shouldFocusGrid: true,
+});
+
+export const resolveGridCellSelectionRequest = (
+  input: ResolveGridCellSelectionInput
+): GridSelectionRequestResult => ({
+  selection: resolveGridCellSelection(input),
+  shouldFocusGrid: true,
+});
+
+export const resolveGridEditStartRequest = ({
+  cell,
+  deletedRowIds = [],
+}: {
+  cell: GridCellSelection;
+  deletedRowIds?: readonly string[];
+}): GridEditStartRequestResult => {
+  if (isDeletedRow(cell.rowId, deletedRowIds)) {
+    return {
+      cell: null,
+      shouldFocusGrid: false,
+    };
+  }
+
+  return {
+    cell,
+    shouldFocusGrid: true,
   };
 };
 
@@ -260,4 +314,23 @@ export const resolveGridDeleteAction = ({
   }
 
   return { type: 'none' };
+};
+
+export const resolveGridDeleteKeyboardInteraction = ({
+  canHandleDeleteAction,
+  ...input
+}: ResolveGridDeleteKeyboardInteractionInput): GridDeleteKeyboardInteractionResult => {
+  const action = resolveGridDeleteAction(input);
+
+  if (!canHandleDeleteAction || action.type === 'none') {
+    return {
+      action: { type: 'none' },
+      shouldPreventDefault: false,
+    };
+  }
+
+  return {
+    action,
+    shouldPreventDefault: true,
+  };
 };

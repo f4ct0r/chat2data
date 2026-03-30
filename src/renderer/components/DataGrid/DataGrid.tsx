@@ -7,9 +7,10 @@ import {
   GridCellSelection,
   GridDeleteAction,
   GridSelectionState,
-  resolveGridCellSelection,
-  resolveGridDeleteAction,
-  resolveGridRowSelection,
+  resolveGridCellSelectionRequest,
+  resolveGridDeleteKeyboardInteraction,
+  resolveGridEditStartRequest,
+  resolveGridRowSelectionRequest,
 } from './data-grid-editing-state';
 
 interface DataGridEditablePreview {
@@ -252,7 +253,7 @@ export const DataGrid: React.FC<DataGridProps> = ({
       return;
     }
 
-    const nextSelection = resolveGridRowSelection({
+    const nextRequest = resolveGridRowSelectionRequest({
       selectedRowIds,
       selectedCell,
       anchorRowId,
@@ -265,8 +266,11 @@ export const DataGrid: React.FC<DataGridProps> = ({
       deletedRowIds,
     });
 
-    focusGridKeyboardTarget(gridKeyboardTargetRef.current);
-    emitSelectionChange(nextSelection);
+    if (nextRequest.shouldFocusGrid) {
+      focusGridKeyboardTarget(gridKeyboardTargetRef.current);
+    }
+
+    emitSelectionChange(nextRequest.selection);
   };
 
   const handleCellSelection = (rowId: string, column: string) => {
@@ -274,7 +278,7 @@ export const DataGrid: React.FC<DataGridProps> = ({
       return;
     }
 
-    const nextSelection = resolveGridCellSelection({
+    const nextRequest = resolveGridCellSelectionRequest({
       selectedRowIds,
       selectedCell,
       anchorRowId,
@@ -282,8 +286,11 @@ export const DataGrid: React.FC<DataGridProps> = ({
       deletedRowIds,
     });
 
-    focusGridKeyboardTarget(gridKeyboardTargetRef.current);
-    emitSelectionChange(nextSelection);
+    if (nextRequest.shouldFocusGrid) {
+      focusGridKeyboardTarget(gridKeyboardTargetRef.current);
+    }
+
+    emitSelectionChange(nextRequest.selection);
   };
 
   const handleCellEditStart = (rowId: string, column: string) => {
@@ -295,8 +302,17 @@ export const DataGrid: React.FC<DataGridProps> = ({
       return;
     }
 
+    const nextRequest = resolveGridEditStartRequest({
+      cell: { rowId, column },
+      deletedRowIds,
+    });
+
+    if (!nextRequest.shouldFocusGrid || !nextRequest.cell) {
+      return;
+    }
+
     focusGridKeyboardTarget(gridKeyboardTargetRef.current);
-    onEditStart?.({ rowId, column });
+    onEditStart?.(nextRequest.cell);
   };
 
   const handleKeyDownCapture = (
@@ -306,7 +322,7 @@ export const DataGrid: React.FC<DataGridProps> = ({
       return;
     }
 
-    const action = resolveGridDeleteAction({
+    const nextInteraction = resolveGridDeleteKeyboardInteraction({
       selectedRowIds,
       selectedCell,
       isEditingCell: Boolean(editablePreview.editingCell),
@@ -315,15 +331,16 @@ export const DataGrid: React.FC<DataGridProps> = ({
       ctrlKey: event.ctrlKey,
       platform: window.navigator.platform,
       deletedRowIds,
+      canHandleDeleteAction: Boolean(onDeleteAction),
     });
 
-    if (action.type === 'none') {
+    if (!nextInteraction.shouldPreventDefault) {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
-    onDeleteAction?.(action);
+    onDeleteAction?.(nextInteraction.action);
   };
 
   return (

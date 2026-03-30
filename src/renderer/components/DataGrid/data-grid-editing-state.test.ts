@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  resolveGridCellSelectionRequest,
   resolveGridDeleteAction,
+  resolveGridDeleteKeyboardInteraction,
+  resolveGridEditStartRequest,
   resolveGridRowSelection,
+  resolveGridRowSelectionRequest,
 } from './data-grid-editing-state';
 
 describe('data grid editing state', () => {
@@ -59,6 +63,95 @@ describe('data grid editing state', () => {
     });
   });
 
+  it('returns focus requests for row, cell, and edit-start interactions', () => {
+    expect(
+      resolveGridRowSelectionRequest({
+        selectedRowIds: [],
+        selectedCell: null,
+        anchorRowId: null,
+        rowId: 'row-1',
+        rowOrder: ['row-1', 'row-2'],
+        shiftKey: false,
+        metaKey: false,
+        ctrlKey: false,
+        platform: 'Win32',
+      })
+    ).toEqual({
+      selection: {
+        selectedRowIds: ['row-1'],
+        selectedCell: null,
+        anchorRowId: 'row-1',
+      },
+      shouldFocusGrid: true,
+    });
+
+    expect(
+      resolveGridCellSelectionRequest({
+        selectedRowIds: [],
+        selectedCell: null,
+        anchorRowId: null,
+        cell: { rowId: 'row-1', column: 'email' },
+      })
+    ).toEqual({
+      selection: {
+        selectedRowIds: [],
+        selectedCell: { rowId: 'row-1', column: 'email' },
+        anchorRowId: 'row-1',
+      },
+      shouldFocusGrid: true,
+    });
+
+    expect(
+      resolveGridEditStartRequest({
+        cell: { rowId: 'row-1', column: 'email' },
+      })
+    ).toEqual({
+      cell: { rowId: 'row-1', column: 'email' },
+      shouldFocusGrid: true,
+    });
+  });
+
+  it('does not request keyboard interception when delete is actionable but no handler is wired', () => {
+    expect(
+      resolveGridDeleteKeyboardInteraction({
+        selectedRowIds: ['row-1'],
+        selectedCell: { rowId: 'row-1', column: 'name' },
+        isEditingCell: false,
+        key: 'Delete',
+        metaKey: false,
+        ctrlKey: false,
+        platform: 'Win32',
+        canHandleDeleteAction: false,
+      })
+    ).toEqual({
+      action: {
+        type: 'none',
+      },
+      shouldPreventDefault: false,
+    });
+  });
+
+  it('prevents the delete key only when a handler can actually process the resolved action', () => {
+    expect(
+      resolveGridDeleteKeyboardInteraction({
+        selectedRowIds: ['row-1'],
+        selectedCell: { rowId: 'row-1', column: 'name' },
+        isEditingCell: false,
+        key: 'Delete',
+        metaKey: false,
+        ctrlKey: false,
+        platform: 'Win32',
+        canHandleDeleteAction: true,
+      })
+    ).toEqual({
+      action: {
+        type: 'deleteRows',
+        rowIds: ['row-1'],
+      },
+      shouldPreventDefault: true,
+    });
+  });
+
   it('ignores deleted rows for selection and delete shortcuts', () => {
     expect(
       resolveGridRowSelection({
@@ -92,6 +185,26 @@ describe('data grid editing state', () => {
       })
     ).toEqual({
       type: 'none',
+    });
+  });
+
+  it('does not intercept no-op delete keyboard events', () => {
+    expect(
+      resolveGridDeleteKeyboardInteraction({
+        selectedRowIds: [],
+        selectedCell: null,
+        isEditingCell: false,
+        key: 'Escape',
+        metaKey: false,
+        ctrlKey: false,
+        platform: 'Win32',
+        canHandleDeleteAction: true,
+      })
+    ).toEqual({
+      action: {
+        type: 'none',
+      },
+      shouldPreventDefault: false,
     });
   });
 });
