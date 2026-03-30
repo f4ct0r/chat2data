@@ -10,46 +10,55 @@ vi.mock('@ant-design/icons', () => ({
 }));
 
 vi.mock('antd', () => {
-  const List = Object.assign(
-    ({
-      className,
-      dataSource,
-      renderItem,
-    }: {
-      className?: string;
-      dataSource: Array<{ id: string }>;
-      renderItem: (item: { id: string }) => React.ReactNode;
-    }) => (
-      <div className={className}>
-        {dataSource.map((item) => (
-          <div key={item.id}>{renderItem(item)}</div>
-        ))}
-      </div>
-    ),
-    {
-      Item: ({
-        className,
-        children,
-        actions,
-      }: {
-        className?: string;
-        children: React.ReactNode;
-        actions?: React.ReactNode[];
-      }) => (
-        <div className={className}>
-          <div>{children}</div>
-          <div>{actions}</div>
-        </div>
-      ),
-    }
+  const ListItem = ({
+    className,
+    children,
+    actions,
+  }: {
+    className?: string;
+    children: React.ReactNode;
+    actions?: React.ReactNode[];
+  }) => (
+    <div className={className}>
+      <div>{children}</div>
+      <div>{actions}</div>
+    </div>
   );
 
-  List.Item.Meta = ({ title, description }: { title: React.ReactNode; description: React.ReactNode }) => (
+  const ListItemWithMeta = ListItem as typeof ListItem & {
+    Meta: ({ title, description }: { title: React.ReactNode; description: React.ReactNode }) => React.JSX.Element;
+  };
+
+  ListItemWithMeta.Meta = ({ title, description }: { title: React.ReactNode; description: React.ReactNode }) => (
     <div>
       <div>{title}</div>
       <div>{description}</div>
     </div>
   );
+
+  const List = (({
+    className,
+    dataSource,
+    renderItem,
+  }: {
+    className?: string;
+    dataSource: Array<{ id: string }>;
+    renderItem: (item: { id: string }) => React.ReactNode;
+  }) => (
+    <div className={className}>
+      {dataSource.map((item) => (
+        <div key={item.id}>{renderItem(item)}</div>
+      ))}
+    </div>
+  )) as ((props: {
+    className?: string;
+    dataSource: Array<{ id: string }>;
+    renderItem: (item: { id: string }) => React.ReactNode;
+  }) => React.JSX.Element) & {
+    Item: typeof ListItemWithMeta;
+  };
+
+  List.Item = ListItemWithMeta;
 
   return {
     Button: ({

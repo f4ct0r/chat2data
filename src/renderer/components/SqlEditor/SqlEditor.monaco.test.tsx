@@ -142,13 +142,14 @@ describe('sql execute shortcut detection', () => {
 describe('sql completion provider', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    (globalThis as typeof globalThis & { window?: unknown }).window = globalThis as typeof globalThis & { api: unknown };
-    (globalThis as typeof globalThis & { api: unknown }).api = {
+    const windowObject = globalThis as typeof globalThis & Window;
+    windowObject.window = windowObject;
+    windowObject.api = {
       db: {
         getSchemaIndex: vi.fn(),
         getTables: vi.fn(),
       },
-    };
+    } as unknown as Window['api'];
   });
 
   it('returns table suggestions after FROM', async () => {

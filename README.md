@@ -111,6 +111,36 @@ npm run build:mac
 npm run build:win
 ```
 
+### macOS DMG Packaging Notes
+
+仓库现在默认支持两种 macOS 打包模式：
+
+- 未配置 Apple 签名身份时：生成可分发的未签名 `.dmg`
+- 配置了签名身份时：生成已签名 `.dmg`
+
+当前构建配置会自动检测以下环境：
+
+- `CSC_LINK` 或 `CSC_NAME`：用于启用 macOS 代码签名
+- `APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD`、`APPLE_TEAM_ID`
+- 或 `APPLE_API_KEY`、`APPLE_API_KEY_ID`、`APPLE_API_ISSUER`
+
+如果只配置了签名身份但没有配置公证凭据，构建会继续执行，但产物只会签名，不会被公证。
+
+构建产物默认输出到 `release/` 目录，例如：
+
+```bash
+release/Chat2Data-1.0.0-arm64.dmg
+```
+
+打包前还会执行一次数据库文件守卫脚本。以下文件模式如果出现在仓库工作目录或 `dist/` 构建输入中，构建会直接失败，避免被误打包进安装包：
+
+- `*.sqlite`
+- `*.sqlite3`
+- `*.db`
+- `*.db3`
+- `*-wal`
+- `*-shm`
+
 ## Project Structure
 
 ```text

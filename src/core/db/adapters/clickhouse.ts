@@ -2,6 +2,21 @@ import { createClient, ClickHouseClient } from '@clickhouse/client';
 import { DatabaseDriver, QueryResult } from '../types';
 import { DecryptedConnectionConfig } from '../../../shared/types';
 
+const CLICKHOUSE_QUERY_STATEMENTS = new Set([
+  'SELECT',
+  'SHOW',
+  'DESCRIBE',
+  'DESC',
+  'EXISTS',
+  'WITH',
+]);
+
+export const shouldUseClickHouseQuery = (sql: string): boolean => {
+  const normalized = sql.trim().replace(/^[;(]+/, '').trim();
+  const firstToken = normalized.match(/^[A-Za-z]+/)?.[0]?.toUpperCase();
+  return firstToken ? CLICKHOUSE_QUERY_STATEMENTS.has(firstToken) : false;
+};
+
 export class ClickhouseAdapter implements DatabaseDriver {
   private client: ClickHouseClient | null = null;
   private currentQueryId: string | null = null;
@@ -59,12 +74,29 @@ export class ClickhouseAdapter implements DatabaseDriver {
     const start = performance.now();
     try {
       this.currentQueryId = globalThis.crypto.randomUUID();
+
+      if (!shouldUseClickHouseQuery(sql)) {
+        await this.client.command({
+          query: sql,
+          query_id: this.currentQueryId,
+        });
+        this.currentQueryId = null;
+        const durationMs = performance.now() - start;
+
+        return {
+          columns: [],
+          rows: [],
+          rowCount: 0,
+          durationMs,
+        };
+      }
+
       const resultSet = await this.client.query({
         query: sql,
         format: 'JSON',
         query_id: this.currentQueryId,
       });
-      
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dataset = await resultSet.json<any>();
       this.currentQueryId = null;

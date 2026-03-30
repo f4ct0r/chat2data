@@ -10,6 +10,7 @@ import { SqlClassifier, SqlRiskLevel } from '../../../core/security/sql-classifi
 import { emitGlobalError } from '../../utils/errorBus';
 import { resolveExecutableSql, SqlExecutionTarget } from '../SqlEditor/sql-execution';
 import { useI18n } from '../../i18n/I18nProvider';
+import { getExecutionDisplayState } from './sql-workspace-state';
 
 interface SqlWorkspaceProps {
   tabId: string;
@@ -92,6 +93,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
 
   const executableSql = resolveExecutableSql(tab.content || '', executionTarget);
   const hasLineSelection = Boolean(executionTarget?.hasSelection);
+  const displayState = getExecutionDisplayState(result, error);
 
   async function performExecution(sql: string) {
     if (!sql.trim() || !tabConnectionId) return;
@@ -101,6 +103,9 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     const startTime = Date.now();
     try {
       const res = await window.api.db.executeQuery(tabConnectionId, sql);
+      if (res.error) {
+        throw new Error(res.error);
+      }
       setResult(res);
       setHistory(prev => [{
         id: Date.now().toString(),
@@ -253,13 +258,18 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
               className: 'h-full min-h-0 flex flex-col',
               children: (
                 <div className="flex-1 min-h-0 p-3 overflow-hidden bg-[#050505] flex flex-col">
-                  {error ? (
+                  {displayState.kind === 'error' ? (
                     <div className="text-[#ff0000] font-mono text-sm p-4 bg-[#ff0000]/10 border border-[#ff0000]/30 rounded h-full overflow-auto">
                       <div className="mb-2">{t('sql.errorHeader')}</div>
-                      {error}
+                      {displayState.message}
                     </div>
-                  ) : result ? (
-                    <DataGrid result={result} />
+                  ) : displayState.kind === 'data' ? (
+                    <DataGrid result={displayState.result} />
+                  ) : displayState.kind === 'success-empty' ? (
+                    <div className="text-[#52c41a] font-mono text-sm p-4 bg-[#52c41a]/10 border border-[#52c41a]/30 rounded h-full overflow-auto">
+                      <div className="mb-2">{t('sql.successHeader')}</div>
+                      {t('sql.successNoResult')}
+                    </div>
                   ) : (
                     <div className="text-[#737373] flex items-center justify-center h-full font-mono text-xs">
                       {t('sql.waiting')}

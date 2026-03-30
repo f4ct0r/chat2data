@@ -17,9 +17,17 @@ let providerRegistered = false;
 
 const TABLE_CLAUSES = new Set(['from', 'join', 'update']);
 
+type MonacoCompletionItemKind = {
+  Keyword: number;
+  Snippet: number;
+  Field: number;
+  Function: number;
+  Class: number;
+};
+
 const toMonacoKind = (monaco: {
   languages: {
-    CompletionItemKind: Record<string, number>;
+    CompletionItemKind: MonacoCompletionItemKind;
   };
 }, suggestion: SqlCompletionSuggestion) => {
   switch (suggestion.kind) {
@@ -70,7 +78,7 @@ const getRangeFromModel = (
 export const createSqlCompletionProvider = (
   monaco: {
     languages: {
-      CompletionItemKind: Record<string, number>;
+      CompletionItemKind: MonacoCompletionItemKind;
     };
   },
   getContext: (model?: { uri?: { toString: () => string } }) => SqlEditorCompletionContext | undefined
@@ -157,7 +165,7 @@ export const registerSqlCompletionProvider = (monaco: {
       language: string,
       provider: ReturnType<typeof createSqlCompletionProvider>
     ) => void;
-    CompletionItemKind: Record<string, number>;
+    CompletionItemKind: MonacoCompletionItemKind;
   };
 }) => {
   if (providerRegistered) {

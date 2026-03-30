@@ -2,12 +2,14 @@
   "name": "chat2data",
   "version": "1.0.0",
   "description": "Chat2Data Electron App",
+  "author": "Chat2Data Contributors",
   "main": "dist/main/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder",
-    "build:mac": "tsc && vite build && electron-builder --mac",
-    "build:win": "tsc && vite build && electron-builder --win",
+    "prepack:guard": "node scripts/assert-no-bundled-databases.mjs",
+    "build": "npm run prepack:guard && tsc && vite build && electron-builder --config electron-builder.config.cjs",
+    "build:mac": "npm run prepack:guard && tsc && vite build && electron-builder --config electron-builder.config.cjs --mac",
+    "build:win": "npm run prepack:guard && tsc && vite build && electron-builder --config electron-builder.config.cjs --win",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "test": "vitest run",
     "postinstall": "electron-builder install-app-deps"
@@ -45,41 +47,12 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "prettier": "^3.2.0",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.3.0",
     "vite": "^5.1.0",
     "vite-plugin-electron": "^0.29.1",
     "vite-plugin-electron-renderer": "^0.14.6",
     "vitest": "^4.1.0"
-  },
-  "build": {
-    "appId": "com.chat2data.app",
-    "productName": "Chat2Data",
-    "copyright": "Copyright © 2026 Chat2Data",
-    "directories": {
-      "output": "release",
-      "buildResources": "assets"
-    },
-    "files": [
-      "dist",
-      "package.json"
-    ],
-    "mac": {
-      "target": [
-        "dmg"
-      ],
-      "icon": "assets/icon.icns"
-    },
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "assets/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true
-    }
   }
 }
