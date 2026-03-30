@@ -20,6 +20,10 @@ type MssqlConstraintRow = {
 
 const MSSQL_UNEDITABLE_REASON = 'Table preview is read-only because no primary key or unique key was found.';
 
+const getMssqlErrorMessage = (error: unknown): string => {
+  return error instanceof Error ? error.message : String(error);
+};
+
 const pickMssqlKey = (rows: MssqlConstraintRow[]): TableEditMetadata['key'] => {
   const sorted = rows
     .map((row) => ({
@@ -246,24 +250,46 @@ export class MssqlAdapter implements DatabaseDriver {
     }
 
     const transaction = new sql.Transaction(this.pool);
-    await transaction.begin();
+    try {
+      await transaction.begin();
+    } catch (error) {
+      return {
+        ok: false,
+        error: getMssqlErrorMessage(error),
+      };
+    }
 
     for (const [index, statement] of statements.entries()) {
       try {
         const request = transaction.request();
         await request.query(statement);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (error: any) {
-        await transaction.rollback();
+      } catch (error) {
+        try {
+          await transaction.rollback();
+        } catch (rollbackError) {
+          return {
+            ok: false,
+            failedStatementIndex: index,
+            error: getMssqlErrorMessage(rollbackError),
+          };
+        }
         return {
           ok: false,
           failedStatementIndex: index,
-          error: error.message || String(error),
+          error: getMssqlErrorMessage(error),
         };
       }
     }
 
-    await transaction.commit();
+    try {
+      await transaction.commit();
+    } catch (error) {
+      return {
+        ok: false,
+        error: getMssqlErrorMessage(error),
+      };
+    }
+
     return { ok: true };
   }
 

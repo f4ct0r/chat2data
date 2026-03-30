@@ -16,6 +16,10 @@ type PostgresConstraintRow = {
 
 const POSTGRES_UNEDITABLE_REASON = 'Table preview is read-only because no primary key or unique key was found.';
 
+const getPostgresErrorMessage = (error: unknown): string => {
+  return error instanceof Error ? error.message : String(error);
+};
+
 const pickPostgresKey = (rows: PostgresConstraintRow[]): TableEditMetadata['key'] => {
   const sorted = rows
     .map((row) => ({
@@ -246,23 +250,45 @@ export class PostgresAdapter implements DatabaseDriver {
       return { ok: true };
     }
 
-    await this.client.query('BEGIN');
+    try {
+      await this.client.query('BEGIN');
+    } catch (error) {
+      return {
+        ok: false,
+        error: getPostgresErrorMessage(error),
+      };
+    }
 
     for (const [index, statement] of statements.entries()) {
       try {
         await this.client.query(statement);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (error: any) {
-        await this.client.query('ROLLBACK');
+      } catch (error) {
+        try {
+          await this.client.query('ROLLBACK');
+        } catch (rollbackError) {
+          return {
+            ok: false,
+            failedStatementIndex: index,
+            error: getPostgresErrorMessage(rollbackError),
+          };
+        }
         return {
           ok: false,
           failedStatementIndex: index,
-          error: error.message || String(error),
+          error: getPostgresErrorMessage(error),
         };
       }
     }
 
-    await this.client.query('COMMIT');
+    try {
+      await this.client.query('COMMIT');
+    } catch (error) {
+      return {
+        ok: false,
+        error: getPostgresErrorMessage(error),
+      };
+    }
+
     return { ok: true };
   }
 

@@ -164,4 +164,56 @@ describe('MssqlAdapter', () => {
       error: 'The DELETE statement conflicted with the REFERENCE constraint',
     });
   });
+
+  it('returns a normalized result when beginning the transaction fails', async () => {
+    transactionBeginMock.mockRejectedValueOnce(new Error('begin failed'));
+
+    await adapter.connect({
+      id: 'mssql-1',
+      name: 'SQL Server',
+      dbType: 'mssql',
+      host: 'localhost',
+      port: 1433,
+      username: 'sa',
+      database: 'analytics',
+    });
+
+    const result = await adapter.executeBatch?.(["UPDATE users SET name = 'Alice' WHERE id = 1"]);
+
+    expect(transactionBeginMock).toHaveBeenCalledTimes(1);
+    expect(transactionRequestQueryMock).not.toHaveBeenCalled();
+    expect(transactionCommitMock).not.toHaveBeenCalled();
+    expect(transactionRollbackMock).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      error: 'begin failed',
+    });
+  });
+
+  it('returns a normalized result when rollback fails after a statement error', async () => {
+    transactionRequestQueryMock.mockRejectedValueOnce(new Error('statement failed'));
+    transactionRollbackMock.mockRejectedValueOnce(new Error('rollback failed'));
+
+    await adapter.connect({
+      id: 'mssql-1',
+      name: 'SQL Server',
+      dbType: 'mssql',
+      host: 'localhost',
+      port: 1433,
+      username: 'sa',
+      database: 'analytics',
+    });
+
+    const result = await adapter.executeBatch?.(["UPDATE users SET name = 'Alice' WHERE id = 1"]);
+
+    expect(transactionBeginMock).toHaveBeenCalledTimes(1);
+    expect(transactionRequestQueryMock).toHaveBeenCalledTimes(1);
+    expect(transactionRollbackMock).toHaveBeenCalledTimes(1);
+    expect(transactionCommitMock).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      failedStatementIndex: 0,
+      error: 'rollback failed',
+    });
+  });
 });

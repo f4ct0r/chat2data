@@ -130,4 +130,53 @@ describe('PostgresAdapter', () => {
       error: 'violates unique constraint',
     });
   });
+
+  it('returns a normalized result when BEGIN fails', async () => {
+    queryMock.mockRejectedValueOnce(new Error('begin failed'));
+
+    await adapter.connect({
+      id: 'pg-1',
+      name: 'PostgreSQL',
+      dbType: 'postgres',
+      host: 'localhost',
+      port: 5432,
+      username: 'postgres',
+      database: 'analytics',
+    });
+
+    const result = await adapter.executeBatch?.(["UPDATE users SET name = 'Alice' WHERE id = 1"]);
+
+    expect(queryMock).toHaveBeenNthCalledWith(1, 'BEGIN');
+    expect(result).toEqual({
+      ok: false,
+      error: 'begin failed',
+    });
+  });
+
+  it('returns a normalized result when COMMIT fails', async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockRejectedValueOnce(new Error('commit failed'));
+
+    await adapter.connect({
+      id: 'pg-1',
+      name: 'PostgreSQL',
+      dbType: 'postgres',
+      host: 'localhost',
+      port: 5432,
+      username: 'postgres',
+      database: 'analytics',
+    });
+
+    const result = await adapter.executeBatch?.(["UPDATE users SET name = 'Alice' WHERE id = 1"]);
+
+    expect(queryMock).toHaveBeenNthCalledWith(1, 'BEGIN');
+    expect(queryMock).toHaveBeenNthCalledWith(2, "UPDATE users SET name = 'Alice' WHERE id = 1");
+    expect(queryMock).toHaveBeenNthCalledWith(3, 'COMMIT');
+    expect(result).toEqual({
+      ok: false,
+      error: 'commit failed',
+    });
+  });
 });

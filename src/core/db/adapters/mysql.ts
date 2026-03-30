@@ -20,6 +20,10 @@ type MysqlConstraintRow = {
 
 const MYSQL_UNEDITABLE_REASON = 'Table preview is read-only because no primary key or unique key was found.';
 
+const getMysqlErrorMessage = (error: unknown): string => {
+  return error instanceof Error ? error.message : String(error);
+};
+
 const pickMysqlKey = (rows: MysqlConstraintRow[]): TableEditMetadata['key'] => {
   const normalized = rows.map((row) => ({
     constraintName: row.constraint_name ?? row.CONSTRAINT_NAME ?? '',
@@ -283,23 +287,45 @@ export class MysqlAdapter implements DatabaseDriver {
       return { ok: true };
     }
 
-    await this.connection.beginTransaction();
+    try {
+      await this.connection.beginTransaction();
+    } catch (error) {
+      return {
+        ok: false,
+        error: getMysqlErrorMessage(error),
+      };
+    }
 
     for (const [index, statement] of statements.entries()) {
       try {
         await this.connection.query(statement);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (error: any) {
-        await this.connection.rollback();
+      } catch (error) {
+        try {
+          await this.connection.rollback();
+        } catch (rollbackError) {
+          return {
+            ok: false,
+            failedStatementIndex: index,
+            error: getMysqlErrorMessage(rollbackError),
+          };
+        }
         return {
           ok: false,
           failedStatementIndex: index,
-          error: error.message || String(error),
+          error: getMysqlErrorMessage(error),
         };
       }
     }
 
-    await this.connection.commit();
+    try {
+      await this.connection.commit();
+    } catch (error) {
+      return {
+        ok: false,
+        error: getMysqlErrorMessage(error),
+      };
+    }
+
     return { ok: true };
   }
 

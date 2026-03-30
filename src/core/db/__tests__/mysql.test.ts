@@ -197,4 +197,79 @@ describe('MysqlAdapter', () => {
       error: 'Duplicate entry',
     });
   });
+
+  it('returns a normalized result when beginning the transaction fails', async () => {
+    const beginTransaction = vi.fn().mockRejectedValue(new Error('begin failed'));
+    const query = vi.fn();
+    const commit = vi.fn();
+    const rollback = vi.fn();
+    const mockConn = {
+      query,
+      beginTransaction,
+      commit,
+      rollback,
+      end: vi.fn().mockResolvedValue(undefined),
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mysql.createConnection as any).mockResolvedValue(mockConn);
+
+    await adapter.connect({
+      id: 'mysql-1',
+      name: 'MySQL',
+      dbType: 'mysql',
+      host: 'localhost',
+      port: 3306,
+      username: 'root',
+      database: 'analytics',
+    });
+
+    const result = await adapter.executeBatch?.(['UPDATE users SET name = "Alice" WHERE id = 1']);
+
+    expect(beginTransaction).toHaveBeenCalledTimes(1);
+    expect(query).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
+    expect(rollback).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      error: 'begin failed',
+    });
+  });
+
+  it('returns a normalized result when rollback fails after a statement error', async () => {
+    const beginTransaction = vi.fn().mockResolvedValue(undefined);
+    const commit = vi.fn().mockResolvedValue(undefined);
+    const rollback = vi.fn().mockRejectedValue(new Error('rollback failed'));
+    const query = vi.fn().mockRejectedValueOnce(new Error('Duplicate entry'));
+    const mockConn = {
+      query,
+      beginTransaction,
+      commit,
+      rollback,
+      end: vi.fn().mockResolvedValue(undefined),
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mysql.createConnection as any).mockResolvedValue(mockConn);
+
+    await adapter.connect({
+      id: 'mysql-1',
+      name: 'MySQL',
+      dbType: 'mysql',
+      host: 'localhost',
+      port: 3306,
+      username: 'root',
+      database: 'analytics',
+    });
+
+    const result = await adapter.executeBatch?.(['UPDATE users SET name = "Alice" WHERE id = 1']);
+
+    expect(beginTransaction).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(rollback).toHaveBeenCalledTimes(1);
+    expect(commit).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      failedStatementIndex: 0,
+      error: 'rollback failed',
+    });
+  });
 });
