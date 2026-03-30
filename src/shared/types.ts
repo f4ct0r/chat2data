@@ -46,6 +46,31 @@ export interface CompletionSchemaIndex {
 
 export type CompletionCacheStatus = 'idle' | 'loading' | 'ready' | 'error';
 
+export interface PreviewTableRef {
+  dbType: ConnectionConfig['dbType'];
+  database?: string;
+  schema?: string;
+  table: string;
+  previewSql: string;
+}
+
+export interface TableEditKey {
+  type: 'primary' | 'unique';
+  columns: string[];
+}
+
+export interface TableEditMetadata {
+  editable: boolean;
+  reason?: string;
+  key: TableEditKey | null;
+}
+
+export interface BatchExecutionResult {
+  ok: boolean;
+  failedStatementIndex?: number;
+  error?: string;
+}
+
 export interface StorageVerificationResult {
   id: string;
   name: string;

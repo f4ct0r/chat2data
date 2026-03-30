@@ -94,6 +94,13 @@ describe('resolvePreviewTarget', () => {
     ).toMatchObject({
       targetTabId: 'sql-1',
       createTab: false,
+      previewTable: {
+        dbType: 'postgres',
+        database: 'analytics',
+        schema: 'public',
+        table: 'users',
+        previewSql: 'SELECT * FROM "analytics"."public"."users" LIMIT 100',
+      },
     });
   });
 
@@ -113,6 +120,13 @@ describe('resolvePreviewTarget', () => {
         dbType: 'postgres',
         database: 'analytics',
         schema: 'public',
+        previewTable: {
+          dbType: 'postgres',
+          database: 'analytics',
+          schema: 'public',
+          table: 'users',
+          previewSql: 'SELECT * FROM "analytics"."public"."users" LIMIT 100',
+        },
       },
     });
   });

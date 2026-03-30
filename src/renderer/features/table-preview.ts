@@ -1,4 +1,7 @@
-import type { ConnectionConfig } from '../../shared/types';
+import type {
+  ConnectionConfig,
+  PreviewTableRef,
+} from '../../shared/types';
 
 export interface TablePreviewRequest {
   connectionId: string;
@@ -26,6 +29,7 @@ export interface PreviewTabDraft {
   database?: string;
   schema?: string;
   completionCacheStatus: 'idle';
+  previewTable: PreviewTableRef;
 }
 
 interface ResolvePreviewTargetParams {
@@ -40,6 +44,7 @@ interface ResolvedExistingPreviewTarget {
   targetTabId: string;
   sql: string;
   requestId: string;
+  previewTable: PreviewTableRef;
 }
 
 interface ResolvedNewPreviewTarget {
@@ -47,6 +52,7 @@ interface ResolvedNewPreviewTarget {
   newTab: PreviewTabDraft;
   sql: string;
   requestId: string;
+  previewTable: PreviewTableRef;
 }
 
 export type ResolvedPreviewTarget =
@@ -102,6 +108,20 @@ const getDefaultSchemaForDbType = (
   }
 };
 
+const buildPreviewTableRef = (
+  dbType: ConnectionConfig['dbType'],
+  previewSql: string,
+  table: string,
+  database?: string,
+  schema?: string
+): PreviewTableRef => ({
+  dbType,
+  database,
+  schema,
+  table,
+  previewSql,
+});
+
 export const buildPreviewTableSql = (request: TablePreviewRequest) => {
   const limit = request.limit ?? 100;
   const qualifiedTable = getPreviewPath(request)
@@ -123,6 +143,17 @@ export const resolvePreviewTarget = ({
 }: ResolvePreviewTargetParams): ResolvedPreviewTarget => {
   const sql = buildPreviewTableSql(request);
   const requestId = `preview:${request.connectionId}:${request.table}:${Date.now()}`;
+  const database = request.database ?? selectedConnection.database;
+  const schema =
+    request.schema ??
+    getDefaultSchemaForDbType(selectedConnection.dbType, database);
+  const previewTable = buildPreviewTableRef(
+    selectedConnection.dbType,
+    sql,
+    request.table,
+    database,
+    schema
+  );
   const activeTab = tabs.find((tab) => tab.id === activeTabId);
 
   if (
@@ -135,6 +166,7 @@ export const resolvePreviewTarget = ({
       targetTabId: activeTab.id,
       sql,
       requestId,
+      previewTable,
     };
   }
 
@@ -142,19 +174,16 @@ export const resolvePreviewTarget = ({
     createTab: true,
     sql,
     requestId,
+    previewTable,
     newTab: {
       title: request.table,
       type: 'sql',
       connectionId: request.connectionId,
       dbType: selectedConnection.dbType,
-      database: request.database ?? selectedConnection.database,
-      schema:
-        request.schema ??
-        getDefaultSchemaForDbType(
-          selectedConnection.dbType,
-          request.database ?? selectedConnection.database
-        ),
+      database,
+      schema,
       completionCacheStatus: 'idle',
+      previewTable,
     },
   };
 };

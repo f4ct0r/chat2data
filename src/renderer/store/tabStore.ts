@@ -1,5 +1,9 @@
 import { create } from 'zustand';
-import { CompletionCacheStatus, ConnectionConfig } from '../../shared/types';
+import {
+  CompletionCacheStatus,
+  ConnectionConfig,
+  type PreviewTableRef,
+} from '../../shared/types';
 
 export type TabType = 'sql' | 'chat';
 
@@ -29,6 +33,7 @@ export interface TabData {
   content?: string; // Optional content for the tab (e.g., SQL query text)
   database?: string;
   schema?: string;
+  previewTable?: PreviewTableRef;
   completionCacheStatus?: CompletionCacheStatus;
   pendingPreviewSql?: string;
   pendingPreviewRequestId?: string;
