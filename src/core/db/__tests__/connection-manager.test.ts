@@ -10,6 +10,11 @@ vi.mock('../adapters/mysql', () => ({
     disconnect = vi.fn().mockResolvedValue(undefined);
     testConnection = vi.fn().mockResolvedValue(true);
     executeQuery = vi.fn().mockResolvedValue({ rows: [], rowCount: 0, columns: [] });
+    getTableEditMetadata = vi.fn().mockResolvedValue({
+      editable: true,
+      key: { type: 'primary', columns: ['id'] }
+    });
+    executeBatch = vi.fn().mockResolvedValue({ ok: true });
   }
 }));
 
@@ -19,6 +24,11 @@ vi.mock('../adapters/postgresql', () => ({
     disconnect = vi.fn().mockResolvedValue(undefined);
     testConnection = vi.fn().mockResolvedValue(true);
     executeQuery = vi.fn().mockResolvedValue({ rows: [], rowCount: 0, columns: [] });
+    getTableEditMetadata = vi.fn().mockResolvedValue({
+      editable: true,
+      key: { type: 'primary', columns: ['id'] }
+    });
+    executeBatch = vi.fn().mockResolvedValue({ ok: true });
   }
 }));
 
@@ -41,6 +51,7 @@ describe('ConnectionManager', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (connectionManager as any).connections?.clear?.();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (sqliteService.getDb as any).mockReturnValue(mockDb);
   });
@@ -122,5 +133,95 @@ describe('ConnectionManager', () => {
     
     expect(driver.disconnect).toHaveBeenCalled();
     expect(() => connectionManager.getConnection('conn-id-3')).toThrow('Connection conn-id-3 is not active');
+  });
+
+  it('should return table edit metadata from the active driver', async () => {
+    const mockRow = {
+      id: 'conn-id-4',
+      name: 'Test DB 4',
+      db_type: 'postgres',
+      host: 'localhost',
+      port: 5432,
+      username: 'user',
+      database: 'analytics',
+      encrypted_password: null
+    };
+
+    mockDb.prepare.mockReturnValue({
+      get: vi.fn().mockReturnValue(mockRow)
+    });
+
+    await connectionManager.connect('conn-id-4');
+
+    const result = await connectionManager.getTableEditMetadata('conn-id-4', {
+      dbType: 'postgres',
+      database: 'analytics',
+      schema: 'public',
+      table: 'users',
+      previewSql: 'SELECT * FROM "analytics"."public"."users" LIMIT 100'
+    });
+
+    expect(result).toEqual({
+      editable: true,
+      key: { type: 'primary', columns: ['id'] }
+    });
+  });
+
+  it('should return read-only metadata when the driver does not support table edit metadata', async () => {
+    (connectionManager as any).connections.set('conn-id-5', {});
+
+    const result = await connectionManager.getTableEditMetadata('conn-id-5', {
+      dbType: 'mysql',
+      database: 'analytics',
+      schema: 'public',
+      table: 'users',
+      previewSql: 'SELECT * FROM users LIMIT 100'
+    });
+
+    expect(result).toEqual({
+      editable: false,
+      reason: 'Editing is not supported for this database.',
+      key: null
+    });
+  });
+
+  it('should forward batch execution to the active driver', async () => {
+    const mockRow = {
+      id: 'conn-id-6',
+      name: 'Test DB 6',
+      db_type: 'postgres',
+      host: 'localhost',
+      port: 5432,
+      username: 'user',
+      database: 'analytics',
+      encrypted_password: null
+    };
+
+    mockDb.prepare.mockReturnValue({
+      get: vi.fn().mockReturnValue(mockRow)
+    });
+
+    await connectionManager.connect('conn-id-6');
+
+    const result = await connectionManager.executeBatch('conn-id-6', ['UPDATE users SET name = "A"', 'DELETE FROM users WHERE id = 1']);
+
+    expect(result).toEqual({ ok: true });
+
+    const driver = connectionManager.getConnection('conn-id-6') as any;
+    expect(driver.executeBatch).toHaveBeenCalledWith(['UPDATE users SET name = "A"', 'DELETE FROM users WHERE id = 1']);
+  });
+
+  it('should reject batch execution when the driver does not support it', async () => {
+    (connectionManager as any).connections.set('conn-id-7', {
+      getTableEditMetadata: vi.fn().mockResolvedValue({
+        editable: false,
+        reason: 'Editing is not supported for this database.',
+        key: null
+      })
+    });
+
+    await expect(
+      connectionManager.executeBatch('conn-id-7', ['UPDATE users SET name = "A"'])
+    ).rejects.toThrow('does not support batch execution');
   });
 });

@@ -109,6 +109,8 @@ export interface ElectronAPI {
     connect: (id: string) => Promise<void>;
     disconnect: (id: string) => Promise<void>;
     executeQuery: (id: string, sql: string) => Promise<QueryResult>;
+    getTableEditMetadata: (id: string, table: PreviewTableRef) => Promise<TableEditMetadata>;
+    executeBatch: (id: string, statements: string[]) => Promise<BatchExecutionResult>;
     killQuery: (id: string) => Promise<void>;
     getExecutionStatus: (id: string) => Promise<'idle' | 'executing'>;
     getDatabases: (id: string) => Promise<string[]>;

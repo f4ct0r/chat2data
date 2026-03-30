@@ -1,4 +1,10 @@
-import { DecryptedConnectionConfig, QueryResult } from '../../shared/types';
+import {
+  BatchExecutionResult,
+  DecryptedConnectionConfig,
+  PreviewTableRef,
+  QueryResult,
+  TableEditMetadata,
+} from '../../shared/types';
 
 export type { QueryResult };
 
@@ -26,6 +32,12 @@ export interface DatabaseDriver {
 
   /** 获取指定 Table 的 Columns */
   getColumns(database?: string, schema?: string, table?: string): Promise<{ name: string; type: string }[]>;
+
+  /** 获取指定表的可编辑元数据 */
+  getTableEditMetadata?(table: PreviewTableRef): Promise<TableEditMetadata>;
+
+  /** 批量执行语句 */
+  executeBatch?(statements: string[]): Promise<BatchExecutionResult>;
 
   /** 中断/取消当前正在执行的长查询 */
   killQuery?(): Promise<void>;

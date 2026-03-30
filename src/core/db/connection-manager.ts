@@ -1,6 +1,12 @@
 import { sqliteService } from '../storage/sqlite-service';
 import { CredentialService } from '../security/credential-service';
-import { ConnectionConfig, DecryptedConnectionConfig } from '../../shared/types';
+import {
+  BatchExecutionResult,
+  ConnectionConfig,
+  DecryptedConnectionConfig,
+  PreviewTableRef,
+  TableEditMetadata,
+} from '../../shared/types';
 import { DatabaseDriver, QueryResult } from './types';
 import { MysqlAdapter } from './adapters/mysql';
 import { PostgresAdapter } from './adapters/postgresql';
@@ -147,6 +153,28 @@ export class ConnectionManager {
   public async getColumns(id: string, database?: string, schema?: string, table?: string): Promise<{name: string, type: string}[]> {
     const driver = this.getConnection(id);
     return await driver.getColumns(database, schema, table);
+  }
+
+  public async getTableEditMetadata(id: string, table: PreviewTableRef): Promise<TableEditMetadata> {
+    const driver = this.getConnection(id);
+    if (!driver.getTableEditMetadata) {
+      return {
+        editable: false,
+        reason: 'Editing is not supported for this database.',
+        key: null,
+      };
+    }
+
+    return await driver.getTableEditMetadata(table);
+  }
+
+  public async executeBatch(id: string, statements: string[]): Promise<BatchExecutionResult> {
+    const driver = this.getConnection(id);
+    if (!driver.executeBatch) {
+      throw new Error(`Connection ${id} does not support batch execution`);
+    }
+
+    return await driver.executeBatch(statements);
   }
 
   /**
