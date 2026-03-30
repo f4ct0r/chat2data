@@ -155,6 +155,51 @@ describe('DataGrid layout', () => {
     expect(markup).toContain('Pending delete');
   });
 
+  it('renders an inline editor for the active editing cell', () => {
+    virtualizerState.items = [
+      {
+        index: 0,
+        size: 36,
+        start: 0,
+      },
+    ];
+
+    const result: QueryResult = {
+      columns: ['id', 'email'],
+      rows: [{ id: 1, email: 'a@example.com' }],
+      rowCount: 1,
+      durationMs: 12,
+    };
+
+    const buffer = createTableEditBuffer(result.rows, ['id']);
+    const rowId = buffer.rows[0].rowId;
+
+    const markup = renderToStaticMarkup(
+      <DataGrid
+        result={result}
+        editablePreview={{
+          buffer,
+          selection: {
+            selectedRowIds: [],
+            selectedCell: {
+              rowId,
+              column: 'email',
+            },
+            anchorRowId: rowId,
+          },
+          editingCell: {
+            rowId,
+            column: 'email',
+          },
+          editingValue: 'draft@example.com',
+        }}
+      />
+    );
+
+    expect(markup).toContain('data-grid-inline-editor="true"');
+    expect(markup).toContain('value="draft@example.com"');
+  });
+
   it('keeps read-only grids without a keyboard tab stop', () => {
     const result: QueryResult = {
       columns: ['id'],

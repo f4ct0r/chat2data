@@ -17,6 +17,7 @@ interface DataGridEditablePreview {
   buffer: TableEditBuffer;
   selection: GridSelectionState;
   editingCell: GridCellSelection | null;
+  editingValue?: string;
 }
 
 interface DataGridProps {
@@ -24,6 +25,9 @@ interface DataGridProps {
   editablePreview?: DataGridEditablePreview;
   onSelectionChange?: (selection: GridSelectionState) => void;
   onEditStart?: (cell: GridCellSelection) => void;
+  onEditChange?: (value: string) => void;
+  onEditCommit?: () => void;
+  onEditCancel?: () => void;
   onDeleteAction?: (action: GridDeleteAction) => void;
 }
 
@@ -101,6 +105,9 @@ export const DataGrid: React.FC<DataGridProps> = ({
   editablePreview,
   onSelectionChange,
   onEditStart,
+  onEditChange,
+  onEditCommit,
+  onEditCancel,
   onDeleteAction,
 }) => {
   const { t } = useI18n();
@@ -446,6 +453,12 @@ export const DataGrid: React.FC<DataGridProps> = ({
                         selectedCell.rowId === rowId &&
                         selectedCell.column === col
                     );
+                    const isEditingCell = Boolean(
+                      editablePreview?.editingCell &&
+                        rowId &&
+                        editablePreview.editingCell.rowId === rowId &&
+                        editablePreview.editingCell.column === col
+                    );
 
                     return (
                       <div
@@ -470,7 +483,32 @@ export const DataGrid: React.FC<DataGridProps> = ({
                             : undefined
                         }
                       >
-                        {displayVal}
+                        {isEditingCell ? (
+                          <input
+                            data-grid-inline-editor="true"
+                            className="w-full bg-transparent text-[#f5f5f5] outline-none"
+                            value={editablePreview?.editingValue ?? displayVal}
+                            autoFocus
+                            spellCheck={false}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => onEditChange?.(event.target.value)}
+                            onBlur={() => onEditCommit?.()}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                onEditCommit?.();
+                                return;
+                              }
+
+                              if (event.key === 'Escape') {
+                                event.preventDefault();
+                                onEditCancel?.();
+                              }
+                            }}
+                          />
+                        ) : (
+                          displayVal
+                        )}
                       </div>
                     );
                   })}
