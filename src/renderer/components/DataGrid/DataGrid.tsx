@@ -26,6 +26,10 @@ interface DataGridProps {
   onDeleteAction?: (action: GridDeleteAction) => void;
 }
 
+export interface GridKeyboardTarget {
+  focus: (options?: FocusOptions) => void;
+}
+
 export const MIN_COLUMN_WIDTH = 100;
 
 const getDefaultColumnWidth = (column: string) =>
@@ -85,6 +89,12 @@ const getRowState = (
   };
 };
 
+export const focusGridKeyboardTarget = (
+  target: GridKeyboardTarget | null | undefined
+) => {
+  target?.focus({ preventScroll: true });
+};
+
 export const DataGrid: React.FC<DataGridProps> = ({
   result,
   editablePreview,
@@ -93,6 +103,7 @@ export const DataGrid: React.FC<DataGridProps> = ({
   onDeleteAction,
 }) => {
   const { t } = useI18n();
+  const gridKeyboardTargetRef = useRef<HTMLDivElement>(null);
   const parentRef = useRef<HTMLDivElement>(null);
   const viewportSizeRef = useRef<ViewportSize | null>(null);
   const resizeStateRef = useRef<{
@@ -254,6 +265,7 @@ export const DataGrid: React.FC<DataGridProps> = ({
       deletedRowIds,
     });
 
+    focusGridKeyboardTarget(gridKeyboardTargetRef.current);
     emitSelectionChange(nextSelection);
   };
 
@@ -270,6 +282,7 @@ export const DataGrid: React.FC<DataGridProps> = ({
       deletedRowIds,
     });
 
+    focusGridKeyboardTarget(gridKeyboardTargetRef.current);
     emitSelectionChange(nextSelection);
   };
 
@@ -282,6 +295,7 @@ export const DataGrid: React.FC<DataGridProps> = ({
       return;
     }
 
+    focusGridKeyboardTarget(gridKeyboardTargetRef.current);
     onEditStart?.({ rowId, column });
   };
 
@@ -314,8 +328,10 @@ export const DataGrid: React.FC<DataGridProps> = ({
 
   return (
     <div
+      ref={gridKeyboardTargetRef}
       className="flex-1 min-h-0 w-full flex flex-col overflow-hidden border border-[#333333] rounded-sm bg-[#050505] font-mono text-[#a3a3a3]"
       data-grid-editable={isEditable ? 'true' : undefined}
+      tabIndex={editablePreview ? 0 : undefined}
       onKeyDownCapture={handleKeyDownCapture}
     >
       <div

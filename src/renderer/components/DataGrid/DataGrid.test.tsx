@@ -8,6 +8,7 @@ import {
 } from '../../features/table-edit-buffer';
 import DataGrid, {
   MIN_COLUMN_WIDTH,
+  focusGridKeyboardTarget,
   getInitialColumnWidths,
   resizeColumnWidth,
   shouldRemeasureViewport,
@@ -147,9 +148,33 @@ describe('DataGrid layout', () => {
     );
 
     expect(markup).toContain('data-grid-editable="true"');
+    expect(markup).toContain('tabindex="0"');
     expect(markup).toContain('data-pending-delete="true"');
     expect(markup).toContain('data-cell-dirty="true"');
     expect(markup).toContain('pending@example.com');
     expect(markup).toContain('Pending delete');
+  });
+
+  it('keeps read-only grids without a keyboard tab stop', () => {
+    const result: QueryResult = {
+      columns: ['id'],
+      rows: [{ id: 1 }],
+      rowCount: 1,
+      durationMs: 12,
+    };
+
+    const markup = renderToStaticMarkup(<DataGrid result={result} />);
+
+    expect(markup).not.toContain('tabindex="0"');
+  });
+
+  it('focuses the grid keyboard target when selection clicks request it', () => {
+    const focusTarget = {
+      focus: vi.fn(),
+    };
+
+    focusGridKeyboardTarget(focusTarget);
+
+    expect(focusTarget.focus).toHaveBeenCalledWith({ preventScroll: true });
   });
 });
