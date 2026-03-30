@@ -54,10 +54,15 @@ If any condition fails, the grid remains read-only and the UI explains why editi
 - Double-click a cell: enter edit mode
 - `Enter` in edit mode: commit the edited value
 - `Esc` in edit mode: cancel the current cell edit
-- `Backspace` or `Delete` on a selected cell while not editing text: set that cell to `NULL`
-- `Cmd+Backspace` or `Delete` with selected rows while not editing text: mark selected rows for deletion
+- `Backspace` or `Delete` on a selected cell while not editing text and with no active row selection: set that cell to `NULL`
+- `Cmd+Backspace` on macOS, or `Delete` with one or more selected rows while not editing text: mark selected rows for deletion
 
-Rows marked for deletion become read-only until the deletion mark is removed.
+Shortcut precedence must be explicit:
+
+- if one or more rows are selected, row deletion takes priority
+- otherwise, the selected cell uses `Backspace/Delete` to set the value to `NULL`
+
+Rows marked for deletion become read-only until the user discards pending changes.
 
 ### Change Toolbar
 
