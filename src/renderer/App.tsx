@@ -13,6 +13,7 @@ import PrivacyConsentDialog from './components/Settings/PrivacyConsentDialog';
 import { emitGlobalError } from './utils/errorBus';
 import { useI18n } from './i18n/I18nProvider';
 import { resolvePreviewTarget, type TablePreviewRequest } from './features/table-preview';
+import { buildPreviewUpdates } from './features/preview-updates';
 
 const { Title, Text } = Typography;
 
@@ -155,13 +156,11 @@ const App: React.FC = () => {
       selectedConnection,
     });
 
-    const previewUpdates = {
-      content: target.sql,
-      database: request.database ?? selectedConnection.database,
-      schema: request.schema ?? getDefaultSchemaForDbType(selectedConnection.dbType, request.database ?? selectedConnection.database),
-      pendingPreviewSql: target.sql,
-      pendingPreviewRequestId: target.requestId,
-    };
+    const previewUpdates = buildPreviewUpdates({
+      target,
+      request,
+      selectedConnection,
+    });
 
     if (target.createTab) {
       addTab({
