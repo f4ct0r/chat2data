@@ -1,9 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createTableEditBuffer,
   markTableEditRowDeleted,
   updateTableEditCell,
 } from './table-edit-buffer';
+
+const originalBuffer = globalThis.Buffer;
+
+beforeEach(() => {
+  (globalThis as typeof globalThis & { Buffer?: typeof Buffer }).Buffer = undefined;
+});
+
+afterEach(() => {
+  (globalThis as typeof globalThis & { Buffer?: typeof Buffer }).Buffer = originalBuffer;
+});
 
 describe('table edit buffer', () => {
   it('derives row identities from original key values and keeps them stable after edits', () => {
@@ -84,5 +94,25 @@ describe('table edit buffer', () => {
         name: 'Mina',
       },
     });
+  });
+
+  it('remains usable when global Buffer is unset and distinguishes binary key values by content', () => {
+    const buffer = createTableEditBuffer(
+      [
+        {
+          id: new Uint8Array([1, 2, 3]),
+          name: 'first',
+        },
+        {
+          id: new Uint8Array([1, 2, 4]),
+          name: 'second',
+        },
+      ],
+      ['id']
+    );
+
+    expect(buffer.rows[0].rowId).toBe('id:binary:010203');
+    expect(buffer.rows[1].rowId).toBe('id:binary:010204');
+    expect(buffer.rows[0].rowId).not.toBe(buffer.rows[1].rowId);
   });
 });

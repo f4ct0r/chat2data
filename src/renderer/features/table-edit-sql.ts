@@ -54,6 +54,13 @@ interface SqlLiteralFailure {
 
 type SqlLiteralResult = SqlLiteralSuccess | SqlLiteralFailure;
 
+const getBufferConstructor = () =>
+  (globalThis as typeof globalThis & {
+    Buffer?: {
+      isBuffer?: (value: unknown) => boolean;
+    };
+  }).Buffer;
+
 const quoteIdentifier = (
   identifier: string,
   dbType: ConnectionConfig['dbType']
@@ -114,7 +121,8 @@ const unsupportedValue = (
 const serializeSqlLiteral = (
   rowId: string,
   column: string,
-  value: unknown
+  value: unknown,
+  dbType: ConnectionConfig['dbType']
 ): SqlLiteralResult => {
   if (value === null) {
     return { ok: true, sql: 'NULL' };
@@ -141,7 +149,17 @@ const serializeSqlLiteral = (
   }
 
   if (typeof value === 'boolean') {
-    return { ok: true, sql: value ? 'TRUE' : 'FALSE' };
+    return {
+      ok: true,
+      sql:
+        dbType === 'mssql'
+          ? value
+            ? '1'
+            : '0'
+          : value
+            ? 'TRUE'
+            : 'FALSE',
+    };
   }
 
   if (typeof value === 'bigint') {
@@ -198,7 +216,11 @@ const serializeSqlLiteral = (
     );
   }
 
-  if (Buffer.isBuffer(value) || value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+  if (
+    value instanceof ArrayBuffer ||
+    ArrayBuffer.isView(value) ||
+    getBufferConstructor()?.isBuffer?.(value) === true
+  ) {
     return unsupportedValue(
       rowId,
       column,
@@ -229,7 +251,12 @@ const buildWhereClause = (
   column: string,
   table: Pick<PreviewTableRef, 'dbType' | 'database' | 'schema' | 'table'>
 ) => {
-  const literal = serializeSqlLiteral(row.rowId, column, row.originalRow[column]);
+  const literal = serializeSqlLiteral(
+    row.rowId,
+    column,
+    row.originalRow[column],
+    table.dbType
+  );
 
   if (!literal.ok) {
     return literal;
@@ -254,7 +281,7 @@ const buildAssignment = (
   value: unknown,
   table: Pick<PreviewTableRef, 'dbType' | 'database' | 'schema' | 'table'>
 ) => {
-  const literal = serializeSqlLiteral(row.rowId, column, value);
+  const literal = serializeSqlLiteral(row.rowId, column, value, table.dbType);
 
   if (!literal.ok) {
     return literal;

@@ -15,6 +15,24 @@ export interface TableEditBuffer {
 
 const cloneRow = (row: QueryRow): QueryRow => ({ ...row });
 
+const getBufferConstructor = () =>
+  (globalThis as typeof globalThis & {
+    Buffer?: {
+      isBuffer?: (value: unknown) => boolean;
+    };
+  }).Buffer;
+
+const getBinaryBytes = (value: ArrayBuffer | ArrayBufferView) => {
+  if (value instanceof ArrayBuffer) {
+    return new Uint8Array(value);
+  }
+
+  return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+};
+
+const serializeBinaryIdentity = (value: ArrayBuffer | ArrayBufferView) =>
+  Array.from(getBinaryBytes(value), (byte) => byte.toString(16).padStart(2, '0')).join('');
+
 const serializeIdentityValue = (value: unknown): string => {
   if (value === null) {
     return 'null';
@@ -46,12 +64,12 @@ const serializeIdentityValue = (value: unknown): string => {
         return `array:${JSON.stringify(value)}`;
       }
 
-      if (Buffer.isBuffer(value) || value instanceof ArrayBuffer) {
-        return `binary:${value.byteLength}`;
+      if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+        return `binary:${serializeBinaryIdentity(value)}`;
       }
 
-      if (ArrayBuffer.isView(value)) {
-        return `binary:${value.byteLength}`;
+      if (getBufferConstructor()?.isBuffer?.(value)) {
+        return `binary:${serializeBinaryIdentity(value as ArrayBufferView)}`;
       }
 
       try {

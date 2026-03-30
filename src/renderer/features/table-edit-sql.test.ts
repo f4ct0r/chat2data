@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTableEditBuffer, markTableEditRowDeleted, updateTableEditCell } from './table-edit-buffer';
 import { generateTableEditSql } from './table-edit-sql';
 
@@ -9,6 +9,16 @@ const previewTable = {
   table: 'users',
   previewSql: 'SELECT * FROM "analytics"."public"."users" LIMIT 100',
 };
+
+const originalBuffer = globalThis.Buffer;
+
+beforeEach(() => {
+  (globalThis as typeof globalThis & { Buffer?: typeof Buffer }).Buffer = undefined;
+});
+
+afterEach(() => {
+  (globalThis as typeof globalThis & { Buffer?: typeof Buffer }).Buffer = originalBuffer;
+});
 
 describe('table edit sql generation', () => {
   it('orders UPDATE statements before DELETE statements in row order', () => {
@@ -104,10 +114,43 @@ describe('table edit sql generation', () => {
     ]);
   });
 
+  it('uses mssql bit literals for booleans', () => {
+    const mssqlTable = {
+      dbType: 'mssql' as const,
+      database: 'analytics',
+      schema: 'dbo',
+      table: 'users',
+      previewSql: 'SELECT TOP 100 * FROM [analytics].[dbo].[users]',
+    };
+
+    const buffer = createTableEditBuffer(
+      [
+        {
+          id: 1,
+          active: false,
+        },
+      ],
+      ['id']
+    );
+
+    const rowId = buffer.rows[0].rowId;
+    const editedBuffer = updateTableEditCell(buffer, rowId, 'active', true);
+    const result = generateTableEditSql(editedBuffer, mssqlTable);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    expect(result.batchStatements).toEqual([
+      'UPDATE [analytics].[dbo].[users] SET [active] = 1 WHERE [id] = 1',
+    ]);
+  });
+
   it.each([
     ['object', { nested: true }, 'object'],
     ['array', [1, 2, 3], 'array'],
-    ['binary', Buffer.from([1, 2, 3]), 'binary'],
+    ['binary', new Uint8Array([1, 2, 3]), 'binary'],
   ])('returns a structured failure for %s values', (_label, value, valueKind) => {
     const buffer = createTableEditBuffer(
       [
