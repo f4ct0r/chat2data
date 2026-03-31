@@ -181,7 +181,8 @@ export class ClickhouseAdapter implements DatabaseDriver {
     }));
   }
 
-  async getTableEditMetadata(_table: PreviewTableRef): Promise<TableEditMetadata> {
+  async getTableEditMetadata(table: PreviewTableRef): Promise<TableEditMetadata> {
+    void table;
     return {
       editable: false,
       reason: 'ClickHouse table previews are read-only because editable preview requires transactional writes.',

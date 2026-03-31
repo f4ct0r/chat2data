@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PostgresAdapter } from '../adapters/postgresql';
 import { DatabaseDriver } from '../types';
-import * as pg from 'pg';
 
 const connectMock = vi.fn();
 const endMock = vi.fn();
