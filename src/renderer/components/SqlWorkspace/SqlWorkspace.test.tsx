@@ -3,11 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { createTableEditBuffer } from '../../features/table-edit-buffer';
 import { generateTableEditSql } from '../../features/table-edit-sql';
-import SqlWorkspace, {
+import SqlWorkspace from './SqlWorkspace';
+import {
   coerceEditablePreviewCellValue,
   getEditablePreviewApplyBuffer,
   getEditablePreviewApplyError,
-} from './SqlWorkspace';
+} from './sql-workspace-utils';
 
 const dataGridPropsState = vi.hoisted(() => ({
   editablePreviewPresent: false,

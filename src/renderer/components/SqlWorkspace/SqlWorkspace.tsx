@@ -9,14 +9,12 @@ import { useTabStore } from '../../store/tabStore';
 import { SqlClassifier, SqlRiskLevel } from '../../../core/security/sql-classifier';
 import { emitGlobalError } from '../../utils/errorBus';
 import { resolveExecutableSql, SqlExecutionTarget } from '../SqlEditor/sql-execution';
-import { useI18n } from '../../i18n/I18nProvider';
+import { useI18n } from '../../i18n/i18n-context';
 import {
   createTableEditBuffer,
   markTableEditRowDeleted,
   resetTableEditBuffer,
-  TableEditBufferRow,
   TableEditBuffer,
-  updateTableEditCell,
 } from '../../features/table-edit-buffer';
 import { generateTableEditSql } from '../../features/table-edit-sql';
 import {
@@ -31,6 +29,11 @@ import {
   shouldLoadEditablePreviewMetadata,
 } from './editable-preview-state';
 import { getExecutionDisplayState } from './sql-workspace-state';
+import {
+  coerceEditablePreviewCellValue,
+  getEditablePreviewApplyBuffer,
+  getEditablePreviewApplyError,
+} from './sql-workspace-utils';
 
 interface SqlWorkspaceProps {
   tabId: string;
@@ -44,40 +47,6 @@ export interface QueryHistoryItem {
   status: 'success' | 'error';
   error?: string;
 }
-
-export const getEditablePreviewApplyError = ({
-  batchResult,
-  batchExecutionError,
-  formatFailedStatement,
-  fallbackMessage,
-}: {
-  batchResult?: {
-    ok: boolean;
-    failedStatementIndex?: number;
-    error?: string;
-  } | null;
-  batchExecutionError?: unknown;
-  formatFailedStatement?: (index: number, message: string) => string;
-  fallbackMessage?: string;
-}) => {
-  if (batchExecutionError) {
-    return getErrorMessage(batchExecutionError);
-  }
-
-  if (!batchResult || batchResult.ok) {
-    return null;
-  }
-
-  if (
-    batchResult.failedStatementIndex !== undefined &&
-    batchResult.error &&
-    formatFailedStatement
-  ) {
-    return formatFailedStatement(batchResult.failedStatementIndex + 1, batchResult.error);
-  }
-
-  return batchResult.error ?? fallbackMessage ?? null;
-};
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) {
@@ -99,85 +68,6 @@ const getPendingChangeCount = (buffer: TableEditBuffer | null) => {
   }
 
   return buffer.rows.filter((row) => row.deleted || row.changedColumns.length > 0).length;
-};
-
-const formatEditingValue = (value: unknown) => {
-  if (value === null) {
-    return '';
-  }
-
-  if (typeof value === 'object') {
-    return JSON.stringify(value);
-  }
-
-  return String(value);
-};
-
-export const coerceEditablePreviewCellValue = (
-  rawValue: string,
-  currentValue: unknown
-) => {
-  if (rawValue === formatEditingValue(currentValue)) {
-    return currentValue;
-  }
-
-  if (typeof currentValue === 'number') {
-    if (rawValue.trim() === '') {
-      return rawValue;
-    }
-
-    const parsed = Number(rawValue);
-    return Number.isFinite(parsed) ? parsed : rawValue;
-  }
-
-  if (typeof currentValue === 'boolean') {
-    if (rawValue === '1' || rawValue === '0') {
-      return rawValue === '1';
-    }
-
-    if (/^(true|false)$/i.test(rawValue)) {
-      return rawValue.toLowerCase() === 'true';
-    }
-  }
-
-  return rawValue;
-};
-
-const findBufferRow = (
-  editBuffer: TableEditBuffer,
-  editingCell: GridCellSelection
-): TableEditBufferRow | undefined =>
-  editBuffer.rows.find((candidate) => candidate.rowId === editingCell.rowId);
-
-export const getEditablePreviewApplyBuffer = ({
-  editBuffer,
-  editingCell,
-  editingValue,
-}: {
-  editBuffer: TableEditBuffer;
-  editingCell: GridCellSelection | null;
-  editingValue: string;
-}) => {
-  if (!editingCell) {
-    return editBuffer;
-  }
-
-  const row = findBufferRow(editBuffer, editingCell);
-  if (!row) {
-    return editBuffer;
-  }
-
-  const nextValue = coerceEditablePreviewCellValue(
-    editingValue,
-    row.pendingRow[editingCell.column]
-  );
-
-  return updateTableEditCell(
-    editBuffer,
-    editingCell.rowId,
-    editingCell.column,
-    nextValue
-  );
 };
 
 const { Text } = Typography;
@@ -350,81 +240,84 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     setApplyError(null);
   }, [editMetadata, lastExecutionKind, previewTable, result]);
 
-  const isPreviewExecution = (sql: string) =>
-    Boolean(previewTable && sql.trim() === previewTable.previewSql.trim());
-
-  async function performExecution(
-    sql: string,
-    options: { suppressDisplayError?: boolean } = {}
-  ) {
-    if (!sql.trim() || !tabConnectionId) {
-      return null;
-    }
-
-    setExecuting(true);
-    if (!options.suppressDisplayError) {
-      setError(null);
-    }
-
-    const startTime = Date.now();
-    try {
-      const res = await window.api.db.executeQuery(tabConnectionId, sql);
-      if (res.error) {
-        throw new Error(res.error);
+  const performExecution = React.useCallback(
+    async (
+      sql: string,
+      options: { suppressDisplayError?: boolean } = {}
+    ) => {
+      if (!sql.trim() || !tabConnectionId) {
+        return null;
       }
 
-      const nextExecutionKind = isPreviewExecution(sql) ? 'preview' : 'custom';
-      setLastExecutionKind(nextExecutionKind);
-      setError(null);
-      setResult(res);
-
-      if (nextExecutionKind === 'preview') {
-        setRefreshLockReason(null);
-        setPostApplyNotice(null);
-      }
-
-      setHistory((prev) => [
-        {
-          id: Date.now().toString(),
-          sql,
-          durationMs: res.durationMs,
-          timestamp: Date.now(),
-          status: 'success',
-        },
-        ...prev,
-      ]);
-
-      return res;
-    } catch (err) {
-      const errorMessage = getErrorMessage(err);
-
+      setExecuting(true);
       if (!options.suppressDisplayError) {
-        setError(errorMessage);
-        setResult(null);
-        emitGlobalError({
-          title: t('errors.sqlExecution'),
-          message: errorMessage,
-          type: 'sql_syntax',
-        });
+        setError(null);
       }
 
-      setHistory((prev) => [
-        {
-          id: Date.now().toString(),
-          sql,
-          durationMs: Date.now() - startTime,
-          timestamp: Date.now(),
-          status: 'error',
-          error: errorMessage,
-        },
-        ...prev,
-      ]);
+      const startTime = Date.now();
+      try {
+        const res = await window.api.db.executeQuery(tabConnectionId, sql);
+        if (res.error) {
+          throw new Error(res.error);
+        }
 
-      throw err;
-    } finally {
-      setExecuting(false);
-    }
-  }
+        const nextExecutionKind =
+          previewTable && sql.trim() === previewTable.previewSql.trim()
+            ? 'preview'
+            : 'custom';
+        setLastExecutionKind(nextExecutionKind);
+        setError(null);
+        setResult(res);
+
+        if (nextExecutionKind === 'preview') {
+          setRefreshLockReason(null);
+          setPostApplyNotice(null);
+        }
+
+        setHistory((prev) => [
+          {
+            id: Date.now().toString(),
+            sql,
+            durationMs: res.durationMs,
+            timestamp: Date.now(),
+            status: 'success',
+          },
+          ...prev,
+        ]);
+
+        return res;
+      } catch (err) {
+        const errorMessage = getErrorMessage(err);
+
+        if (!options.suppressDisplayError) {
+          setError(errorMessage);
+          setResult(null);
+          emitGlobalError({
+            title: t('errors.sqlExecution'),
+            message: errorMessage,
+            type: 'sql_syntax',
+          });
+        }
+
+        setHistory((prev) => [
+          {
+            id: Date.now().toString(),
+            sql,
+            durationMs: Date.now() - startTime,
+            timestamp: Date.now(),
+            status: 'error',
+            error: errorMessage,
+          },
+          ...prev,
+        ]);
+
+        throw err;
+      } finally {
+        setExecuting(false);
+      }
+    },
+    [previewTable, tabConnectionId, t]
+  );
 
   useEffect(() => {
     if (
@@ -450,13 +343,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
           pendingPreviewRequestId: undefined,
         });
       });
-  }, [
-    pendingPreviewRequestId,
-    pendingPreviewSql,
-    tabRecordId,
-    tabType,
-    updateTab,
-  ]);
+  }, [pendingPreviewRequestId, pendingPreviewSql, performExecution, tabRecordId, tabType, updateTab]);
 
   const handleExecute = async () => {
     if (!executableSql) return;
@@ -465,7 +352,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     setPostApplyNotice(null);
 
     const classification = SqlClassifier.classify(executableSql);
-    
+
     if (classification.level === SqlRiskLevel.DANGEROUS) {
       Modal.confirm({
         title: t('sql.dangerousTitle'),
