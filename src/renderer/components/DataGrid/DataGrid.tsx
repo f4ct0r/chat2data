@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { TableEditBuffer } from '../../features/table-edit-buffer';
 import { QueryRow, QueryResult } from '../../../shared/types';
-import { useI18n } from '../../i18n/I18nProvider';
+import { useI18n } from '../../i18n/i18n-context';
 import {
   focusGridKeyboardTarget,
   getDefaultColumnWidth,

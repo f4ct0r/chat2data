@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRootNodes } from './ObjectBrowser';
+import { buildRootNodes } from './object-browser';
 
 describe('ObjectBrowser root node selection', () => {
   it('restricts root nodes to the configured connection database when one is provided', () => {

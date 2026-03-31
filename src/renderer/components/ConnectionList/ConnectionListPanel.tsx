@@ -3,7 +3,7 @@ import { Button, List, Tooltip, Typography, Space, Popconfirm } from 'antd';
 import { PlusOutlined, DatabaseOutlined, EditOutlined, DeleteOutlined, DisconnectOutlined } from '@ant-design/icons';
 import { ConnectionConfig } from '../../../shared/types';
 import ConnectionModal from './ConnectionModal';
-import { useI18n } from '../../i18n/I18nProvider';
+import { useI18n } from '../../i18n/i18n-context';
 
 const { Text } = Typography;
 

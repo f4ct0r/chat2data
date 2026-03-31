@@ -11,7 +11,7 @@ import WorkspaceTabs from './components/Tabs/WorkspaceTabs';
 import { SidebarView } from './components/Layout/Sidebar';
 import PrivacyConsentDialog from './components/Settings/PrivacyConsentDialog';
 import { emitGlobalError } from './utils/errorBus';
-import { useI18n } from './i18n/I18nProvider';
+import { useI18n } from './i18n/i18n-context';
 import { resolvePreviewTarget, type TablePreviewRequest } from './features/table-preview';
 import { buildPreviewUpdates } from './features/preview-updates';
 

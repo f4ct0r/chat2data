@@ -1,7 +1,7 @@
 import React from 'react';
 import { Database, MessageSquare, Settings, LayoutDashboard } from 'lucide-react';
 import { Button, Tooltip } from 'antd';
-import { useI18n } from '../../i18n/I18nProvider';
+import { useI18n } from '../../i18n/i18n-context';
 
 export type SidebarView = 'dashboard' | 'chat' | 'connections';
 

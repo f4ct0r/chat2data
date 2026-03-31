@@ -100,7 +100,7 @@ describe('SqlEditor Monaco bootstrap', () => {
 
 describe('sql execute shortcut detection', () => {
   it('matches Command+Enter on macOS', async () => {
-    const { isSqlExecuteShortcut } = await import('./SqlEditor');
+    const { isSqlExecuteShortcut } = await import('./sql-shortcuts');
 
     expect(
       isSqlExecuteShortcut({
@@ -113,7 +113,7 @@ describe('sql execute shortcut detection', () => {
   });
 
   it('matches Control+Enter on Windows', async () => {
-    const { isSqlExecuteShortcut } = await import('./SqlEditor');
+    const { isSqlExecuteShortcut } = await import('./sql-shortcuts');
 
     expect(
       isSqlExecuteShortcut({
@@ -126,7 +126,7 @@ describe('sql execute shortcut detection', () => {
   });
 
   it('does not match Control+Enter on macOS', async () => {
-    const { isSqlExecuteShortcut } = await import('./SqlEditor');
+    const { isSqlExecuteShortcut } = await import('./sql-shortcuts');
 
     expect(
       isSqlExecuteShortcut({

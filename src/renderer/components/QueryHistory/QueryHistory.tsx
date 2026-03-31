@@ -2,7 +2,7 @@ import React from 'react';
 import { Button, List, Tag } from 'antd';
 import { PlayCircleOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { QueryHistoryItem } from '../SqlWorkspace/SqlWorkspace';
-import { useI18n } from '../../i18n/I18nProvider';
+import { useI18n } from '../../i18n/i18n-context';
 
 interface QueryHistoryProps {
   history: QueryHistoryItem[];

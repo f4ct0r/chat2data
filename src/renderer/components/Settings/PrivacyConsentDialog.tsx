@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Typography, Button } from 'antd';
 import { SafetyCertificateOutlined, CloudUploadOutlined, LockOutlined } from '@ant-design/icons';
-import { useI18n } from '../../i18n/I18nProvider';
+import { useI18n } from '../../i18n/i18n-context';
 
 const { Title, Paragraph, Text } = Typography;
 

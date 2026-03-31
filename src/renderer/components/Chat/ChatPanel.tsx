@@ -5,7 +5,7 @@ import { useTabStore } from '../../store/tabStore';
 import { ConnectionConfig, QueryResult } from '../../../shared/types';
 import DataGrid from '../DataGrid/DataGrid';
 import { emitGlobalError } from '../../utils/errorBus';
-import { useI18n } from '../../i18n/I18nProvider';
+import { useI18n } from '../../i18n/i18n-context';
 
 const { Text } = Typography;
 

@@ -8,8 +8,9 @@ import {
   ProfileOutlined 
 } from '@ant-design/icons';
 import { ConnectionConfig } from '../../../shared/types';
-import { useI18n } from '../../i18n/I18nProvider';
+import { useI18n } from '../../i18n/i18n-context';
 import type { TablePreviewRequest } from '../../features/table-preview';
+import { buildRootNodes, type BrowserNode } from './object-browser';
 
 const { Text } = Typography;
 
@@ -21,34 +22,6 @@ interface ObjectBrowserProps {
 }
 
 type NodeType = 'root' | 'database' | 'schema' | 'table' | 'column';
-
-interface BrowserNode {
-  key: string;
-  title: string;
-  type: NodeType;
-  database?: string;
-  schema?: string;
-  table?: string;
-  isLeaf?: boolean;
-  children?: BrowserNode[];
-}
-
-export const buildRootNodes = (
-  databases: string[],
-  connectionDatabase?: string
-): BrowserNode[] => {
-  const visibleDatabases = connectionDatabase
-    ? databases.filter((database) => database === connectionDatabase)
-    : databases;
-
-  return visibleDatabases.map((database) => ({
-    key: `db:${database}`,
-    title: database,
-    type: 'database',
-    database,
-    isLeaf: false,
-  }));
-};
 
 const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
   connectionId,

@@ -3,7 +3,8 @@ import ReactDOM from 'react-dom/client';
 import { App as AntdApp, Button, Result, ConfigProvider, theme } from 'antd';
 import App from './App';
 import GlobalErrorPrompt from './components/GlobalErrorPrompt/GlobalErrorPrompt';
-import { I18nContext, I18nProvider } from './i18n/I18nProvider';
+import { I18nContext } from './i18n/i18n-context';
+import { I18nProvider } from './i18n/I18nProvider';
 import './index.css';
 
 const getErrorMessage = (error: unknown): string => {
