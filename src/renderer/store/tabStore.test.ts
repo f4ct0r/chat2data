@@ -17,6 +17,13 @@ describe('tabStore completion context', () => {
       database: 'analytics',
       schema: 'public',
       completionCacheStatus: 'idle',
+      previewTable: {
+        dbType: 'postgres',
+        database: 'analytics',
+        schema: 'public',
+        table: 'users',
+        previewSql: 'SELECT * FROM "analytics"."public"."users" LIMIT 100',
+      },
     });
 
     const tab = useTabStore.getState().tabs.find((entry) => entry.id === tabId);
@@ -25,6 +32,10 @@ describe('tabStore completion context', () => {
       database: 'analytics',
       schema: 'public',
       completionCacheStatus: 'idle',
+      previewTable: {
+        table: 'users',
+        previewSql: 'SELECT * FROM "analytics"."public"."users" LIMIT 100',
+      },
     });
   });
 

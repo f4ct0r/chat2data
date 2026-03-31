@@ -1,6 +1,11 @@
 import { createClient, ClickHouseClient } from '@clickhouse/client';
 import { DatabaseDriver, QueryResult } from '../types';
-import { DecryptedConnectionConfig } from '../../../shared/types';
+import {
+  BatchExecutionResult,
+  DecryptedConnectionConfig,
+  PreviewTableRef,
+  TableEditMetadata,
+} from '../../../shared/types';
 
 const CLICKHOUSE_QUERY_STATEMENTS = new Set([
   'SELECT',
@@ -174,6 +179,27 @@ export class ClickhouseAdapter implements DatabaseDriver {
       name: row.name,
       type: row.type,
     }));
+  }
+
+  async getTableEditMetadata(table: PreviewTableRef): Promise<TableEditMetadata> {
+    void table;
+    return {
+      editable: false,
+      reason: 'ClickHouse table previews are read-only because editable preview requires transactional writes.',
+      key: null,
+    };
+  }
+
+  async executeBatch(statements: string[]): Promise<BatchExecutionResult> {
+    if (statements.length === 0) {
+      return { ok: true };
+    }
+
+    return {
+      ok: false,
+      failedStatementIndex: 0,
+      error: 'ClickHouse does not support transactional batch execution for editable previews.',
+    };
   }
 
   async killQuery(): Promise<void> {

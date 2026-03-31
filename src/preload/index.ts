@@ -1,6 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IpcChannels } from '../shared/ipc-channels';
-import { AppLanguage, ConnectionConfig, ElectronAPI, LlmProvider } from '../shared/types';
+import {
+  AppLanguage,
+  BatchExecutionResult,
+  ConnectionConfig,
+  ElectronAPI,
+  LlmProvider,
+  PreviewTableRef,
+  TableEditMetadata,
+} from '../shared/types';
 
 const api: ElectronAPI = {
   window: {
@@ -25,6 +33,10 @@ const api: ElectronAPI = {
       ipcRenderer.invoke(IpcChannels.DB_DISCONNECT, id),
     executeQuery: (id: string, sql: string) => 
       ipcRenderer.invoke(IpcChannels.DB_EXECUTE_QUERY, id, sql),
+    getTableEditMetadata: (id: string, table: PreviewTableRef) =>
+      ipcRenderer.invoke(IpcChannels.DB_GET_TABLE_EDIT_METADATA, id, table) as Promise<TableEditMetadata>,
+    executeBatch: (id: string, statements: string[]) =>
+      ipcRenderer.invoke(IpcChannels.DB_EXECUTE_BATCH, id, statements) as Promise<BatchExecutionResult>,
     killQuery: (id: string) => 
       ipcRenderer.invoke(IpcChannels.DB_KILL_QUERY, id),
     getExecutionStatus: (id: string) => 

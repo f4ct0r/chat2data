@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Select, InputNumber } from 'antd';
 import { ConnectionConfig } from '../../../shared/types';
-import { useI18n } from '../../i18n/I18nProvider';
+import { useI18n } from '../../i18n/i18n-context';
 
 interface ConnectionModalProps {
   open: boolean;

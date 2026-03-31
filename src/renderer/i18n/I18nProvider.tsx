@@ -1,14 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppLanguage } from '../../shared/types';
-import { defaultLanguage, isSupportedLanguage, messages, TranslationKey } from './messages';
+import { I18nContext, type I18nContextValue } from './i18n-context';
+import { defaultLanguage, isSupportedLanguage, messages } from './messages';
 
 type TranslationValues = Record<string, string | number>;
-
-interface I18nContextValue {
-  language: AppLanguage;
-  t: (key: TranslationKey, values?: TranslationValues) => string;
-  setLanguage: (language: AppLanguage, persist?: boolean) => Promise<void>;
-}
 
 const formatMessage = (template: string, values?: TranslationValues) => {
   if (!values) {
@@ -19,14 +14,6 @@ const formatMessage = (template: string, values?: TranslationValues) => {
     return message.replaceAll(`{${key}}`, String(value));
   }, template);
 };
-
-const defaultContextValue: I18nContextValue = {
-  language: defaultLanguage,
-  t: (key, values) => formatMessage(messages[defaultLanguage][key], values),
-  setLanguage: async () => undefined,
-};
-
-export const I18nContext = createContext<I18nContextValue>(defaultContextValue);
 
 export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<AppLanguage>(defaultLanguage);
@@ -56,7 +43,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const t = (key: TranslationKey, values?: TranslationValues) => {
+  const t: I18nContextValue['t'] = (key, values) => {
     const dictionary = messages[language] ?? messages[defaultLanguage];
     const fallback = messages[defaultLanguage][key];
     return formatMessage(dictionary[key] ?? fallback, values);
@@ -68,5 +55,3 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     </I18nContext.Provider>
   );
 };
-
-export const useI18n = () => useContext(I18nContext);

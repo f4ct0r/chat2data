@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Modal, Form, Input, message, Tabs, Alert, Select, Button, Card, Popconfirm } from 'antd';
 import { KeyOutlined, SafetyCertificateOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { AppLanguage, LlmProvider } from '../../../shared/types';
-import { useI18n } from '../../i18n/I18nProvider';
+import { useI18n } from '../../i18n/i18n-context';
 
 interface SettingsModalProps {
   open: boolean;

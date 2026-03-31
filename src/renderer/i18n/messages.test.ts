@@ -20,4 +20,11 @@ describe('renderer i18n messages', () => {
     expect(messages['zh-CN']['privacy.title']).toBe('隐私与数据安全说明');
     expect(messages['en-US']['privacy.title']).toBe('Privacy & Data Security');
   });
+
+  it('contains editable preview strings in both supported languages', () => {
+    expect(messages['zh-CN']['editablePreview.apply']).toBeDefined();
+    expect(messages['en-US']['editablePreview.apply']).toBeDefined();
+    expect(messages['zh-CN']['editablePreview.refreshFailedApplied']).toBeDefined();
+    expect(messages['en-US']['editablePreview.refreshFailedApplied']).toBeDefined();
+  });
 });

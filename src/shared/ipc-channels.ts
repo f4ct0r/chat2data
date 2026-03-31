@@ -23,6 +23,8 @@ export enum IpcChannels {
   DB_BUILD_SCHEMA_INDEX = 'db:buildSchemaIndex',
   DB_GET_SCHEMA_INDEX = 'db:getSchemaIndex',
   DB_REFRESH_SCHEMA_INDEX = 'db:refreshSchemaIndex',
+  DB_GET_TABLE_EDIT_METADATA = 'db:getTableEditMetadata',
+  DB_EXECUTE_BATCH = 'db:executeBatch',
 
   // Settings & Security
   SETTINGS_SAVE_API_KEY = 'settings:saveApiKey',

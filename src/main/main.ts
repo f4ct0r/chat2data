@@ -6,7 +6,7 @@ import { CredentialService } from '../core/security/credential-service';
 import { connectionManager } from '../core/db/connection-manager';
 import { QueryExecutor } from '../core/executor/query-executor';
 import { ChatAgent, AgentContext } from '../core/agent/chat-agent';
-import { AppLanguage, ConnectionConfig, LlmProvider } from '../shared/types';
+import { AppLanguage, ConnectionConfig, LlmProvider, PreviewTableRef } from '../shared/types';
 import { randomUUID } from 'crypto';
 import { completionSchemaService } from '../core/agent/completion-schema-service';
 
@@ -187,6 +187,14 @@ app.whenReady().then(() => {
 
   ipcMain.handle(IpcChannels.DB_GET_COLUMNS, async (_event, id: string, database?: string, schema?: string, table?: string) => {
     return await connectionManager.getColumns(id, database, schema, table);
+  });
+
+  ipcMain.handle(IpcChannels.DB_GET_TABLE_EDIT_METADATA, async (_event, id: string, table: PreviewTableRef) => {
+    return await connectionManager.getTableEditMetadata(id, table);
+  });
+
+  ipcMain.handle(IpcChannels.DB_EXECUTE_BATCH, async (_event, id: string, statements: string[]) => {
+    return await connectionManager.executeBatch(id, statements);
   });
 
   ipcMain.handle(IpcChannels.DB_BUILD_SCHEMA_INDEX, async (_event, id: string, database?: string, schema?: string) => {

@@ -1,6 +1,83 @@
 import { createConnection, Connection } from 'mysql2/promise';
 import { DatabaseDriver, QueryResult } from '../types';
-import { DecryptedConnectionConfig } from '../../../shared/types';
+import {
+  BatchExecutionResult,
+  DecryptedConnectionConfig,
+  PreviewTableRef,
+  TableEditMetadata,
+} from '../../../shared/types';
+
+type MysqlConstraintRow = {
+  constraint_name?: string;
+  CONSTRAINT_NAME?: string;
+  constraint_type?: string;
+  CONSTRAINT_TYPE?: string;
+  column_name?: string;
+  COLUMN_NAME?: string;
+  ordinal_position?: number;
+  ORDINAL_POSITION?: number;
+};
+
+const MYSQL_UNEDITABLE_REASON = 'Table preview is read-only because no primary key or unique key was found.';
+
+const getMysqlErrorMessage = (error: unknown): string => {
+  return error instanceof Error ? error.message : String(error);
+};
+
+const pickMysqlKey = (rows: MysqlConstraintRow[]): TableEditMetadata['key'] => {
+  const normalized = rows.map((row) => ({
+    constraintName: row.constraint_name ?? row.CONSTRAINT_NAME ?? '',
+    constraintType: row.constraint_type ?? row.CONSTRAINT_TYPE ?? '',
+    columnName: row.column_name ?? row.COLUMN_NAME ?? '',
+    ordinalPosition: Number(row.ordinal_position ?? row.ORDINAL_POSITION ?? 0),
+  }));
+
+  const sorted = normalized.sort((left, right) => {
+    const leftPriority = left.constraintType === 'PRIMARY KEY' ? 0 : 1;
+    const rightPriority = right.constraintType === 'PRIMARY KEY' ? 0 : 1;
+    return leftPriority - rightPriority
+      || left.constraintName.localeCompare(right.constraintName)
+      || left.ordinalPosition - right.ordinalPosition;
+  });
+
+  const groups = new Map<string, { type: 'primary' | 'unique'; columns: string[] }>();
+
+  for (const row of sorted) {
+    if (!row.constraintName || !row.columnName) {
+      continue;
+    }
+
+    const type = row.constraintType === 'PRIMARY KEY' ? 'primary' : row.constraintType === 'UNIQUE' ? 'unique' : null;
+    if (!type) {
+      continue;
+    }
+
+    const existing = groups.get(row.constraintName);
+    if (existing) {
+      existing.columns.push(row.columnName);
+      continue;
+    }
+
+    groups.set(row.constraintName, {
+      type,
+      columns: [row.columnName],
+    });
+  }
+
+  for (const group of groups.values()) {
+    if (group.type === 'primary') {
+      return group;
+    }
+  }
+
+  for (const group of groups.values()) {
+    if (group.type === 'unique') {
+      return group;
+    }
+  }
+
+  return null;
+};
 
 export class MysqlAdapter implements DatabaseDriver {
   private connection: Connection | null = null;
@@ -151,6 +228,105 @@ export class MysqlAdapter implements DatabaseDriver {
       name: row.column_name || row.COLUMN_NAME,
       type: row.data_type || row.DATA_TYPE,
     }));
+  }
+
+  async getTableEditMetadata(table: PreviewTableRef): Promise<TableEditMetadata> {
+    if (!this.connection) {
+      throw new Error('Not connected');
+    }
+
+    const databaseName = table.schema || table.database || this.config?.database;
+    if (!databaseName) {
+      return {
+        editable: false,
+        reason: MYSQL_UNEDITABLE_REASON,
+        key: null,
+      };
+    }
+
+    const [rows] = await this.connection.query(
+      `
+        SELECT
+          tc.CONSTRAINT_NAME AS constraint_name,
+          tc.CONSTRAINT_TYPE AS constraint_type,
+          kcu.COLUMN_NAME AS column_name,
+          kcu.ORDINAL_POSITION AS ordinal_position
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA
+         AND tc.TABLE_NAME = kcu.TABLE_NAME
+         AND tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+        WHERE tc.TABLE_SCHEMA = ?
+          AND tc.TABLE_NAME = ?
+          AND tc.CONSTRAINT_TYPE IN ('PRIMARY KEY', 'UNIQUE')
+      `,
+      [databaseName, table.table]
+    );
+
+    const key = pickMysqlKey(rows as MysqlConstraintRow[]);
+    if (!key) {
+      return {
+        editable: false,
+        reason: MYSQL_UNEDITABLE_REASON,
+        key: null,
+      };
+    }
+
+    return {
+      editable: true,
+      key,
+    };
+  }
+
+  async executeBatch(statements: string[]): Promise<BatchExecutionResult> {
+    if (!this.connection) {
+      throw new Error('Not connected');
+    }
+
+    if (statements.length === 0) {
+      return { ok: true };
+    }
+
+    try {
+      await this.connection.beginTransaction();
+    } catch (error) {
+      return {
+        ok: false,
+        error: getMysqlErrorMessage(error),
+      };
+    }
+
+    for (const [index, statement] of statements.entries()) {
+      try {
+        await this.connection.query(statement);
+      } catch (error) {
+        try {
+          await this.connection.rollback();
+        } catch (rollbackError) {
+          return {
+            ok: false,
+            failedStatementIndex: index,
+            error: getMysqlErrorMessage(rollbackError),
+          };
+        }
+        return {
+          ok: false,
+          failedStatementIndex: index,
+          error: getMysqlErrorMessage(error),
+        };
+      }
+    }
+
+    try {
+      await this.connection.commit();
+    } catch (error) {
+      return {
+        ok: false,
+        error: getMysqlErrorMessage(error),
+      };
+    }
+
+    return { ok: true };
   }
 
   async killQuery(): Promise<void> {

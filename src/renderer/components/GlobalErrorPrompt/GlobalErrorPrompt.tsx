@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { App } from 'antd';
 import { GlobalErrorPayload } from '../../utils/errorBus';
-import { useI18n } from '../../i18n/I18nProvider';
+import { useI18n } from '../../i18n/i18n-context';
 
 const isBenignCancellation = (error: unknown): boolean => {
   if (!error) {

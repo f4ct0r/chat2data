@@ -4,7 +4,7 @@ import { useTabStore } from '../../store/tabStore';
 import { CodeOutlined, MessageOutlined } from '@ant-design/icons';
 import SqlWorkspace from '../SqlWorkspace/SqlWorkspace';
 import ChatPanel from '../Chat/ChatPanel';
-import { useI18n } from '../../i18n/I18nProvider';
+import { useI18n } from '../../i18n/i18n-context';
 
 type TargetKey = React.MouseEvent | React.KeyboardEvent | string;
 
