@@ -14,12 +14,15 @@ import {
   createTableEditBuffer,
   markTableEditRowDeleted,
   resetTableEditBuffer,
+  restoreTableEditRows,
   TableEditBuffer,
+  updateTableEditCell,
 } from '../../features/table-edit-buffer';
 import { generateTableEditSql } from '../../features/table-edit-sql';
 import {
   GridCellSelection,
   GridDeleteAction,
+  GridEscapeAction,
   GridSelectionState,
 } from '../DataGrid/data-grid-editing-state';
 import {
@@ -31,6 +34,8 @@ import {
 import { getExecutionDisplayState } from './sql-workspace-state';
 import {
   coerceEditablePreviewCellValue,
+  findEditablePreviewBufferRow,
+  formatEditablePreviewValue,
   getEditablePreviewApplyBuffer,
   getEditablePreviewApplyError,
 } from './sql-workspace-utils';
@@ -88,6 +93,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
   const [selection, setSelection] = useState<GridSelectionState>(EMPTY_GRID_SELECTION);
   const [editingCell, setEditingCell] = useState<GridCellSelection | null>(null);
   const [editingValue, setEditingValue] = useState('');
+  const [lastDeletedRowIds, setLastDeletedRowIds] = useState<string[]>([]);
   const [isApplying, setIsApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [postApplyNotice, setPostApplyNotice] = useState<EditablePreviewNotice | null>(null);
@@ -171,6 +177,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     setSelection(EMPTY_GRID_SELECTION);
     setEditingCell(null);
     setEditingValue('');
+    setLastDeletedRowIds([]);
     setApplyError(null);
     setPostApplyNotice(null);
     setRefreshLockReason(null);
@@ -230,6 +237,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
       setSelection(EMPTY_GRID_SELECTION);
       setEditingCell(null);
       setEditingValue('');
+      setLastDeletedRowIds([]);
       return;
     }
 
@@ -237,6 +245,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     setSelection(EMPTY_GRID_SELECTION);
     setEditingCell(null);
     setEditingValue('');
+    setLastDeletedRowIds([]);
     setApplyError(null);
   }, [editMetadata, lastExecutionKind, previewTable, result]);
 
@@ -386,13 +395,13 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
       return;
     }
 
-    const row = findBufferRow(editBuffer, cell);
+    const row = findEditablePreviewBufferRow(editBuffer, cell);
     if (!row) {
       return;
     }
 
     setEditingCell(cell);
-    setEditingValue(formatEditingValue(row.pendingRow[cell.column]));
+    setEditingValue(formatEditablePreviewValue(row.pendingRow[cell.column]));
     setApplyError(null);
     setPostApplyNotice(null);
   };
@@ -402,7 +411,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
       return;
     }
 
-    const row = findBufferRow(editBuffer, editingCell);
+    const row = findEditablePreviewBufferRow(editBuffer, editingCell);
     if (!row) {
       setEditingCell(null);
       setEditingValue('');
@@ -417,6 +426,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     setEditBuffer(
       updateTableEditCell(editBuffer, editingCell.rowId, editingCell.column, nextValue)
     );
+    setLastDeletedRowIds([]);
     setSelection({
       selectedRowIds: [],
       selectedCell: editingCell,
@@ -443,6 +453,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
       setEditBuffer(
         updateTableEditCell(editBuffer, action.cell.rowId, action.cell.column, null)
       );
+      setLastDeletedRowIds([]);
       setEditingCell(null);
       setEditingValue('');
       return;
@@ -455,10 +466,25 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
       );
 
       setEditBuffer(nextBuffer);
+      setLastDeletedRowIds(action.rowIds);
       setSelection(EMPTY_GRID_SELECTION);
       setEditingCell(null);
       setEditingValue('');
     }
+  };
+
+  const handleEscapeAction = (action: GridEscapeAction) => {
+    if (!editBuffer || action.type !== 'restoreDeletedRows') {
+      return;
+    }
+
+    setEditBuffer(restoreTableEditRows(editBuffer, action.rowIds));
+    setLastDeletedRowIds([]);
+    setSelection(EMPTY_GRID_SELECTION);
+    setEditingCell(null);
+    setEditingValue('');
+    setApplyError(null);
+    setPostApplyNotice(null);
   };
 
   const handleDiscardChanges = () => {
@@ -467,6 +493,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     }
 
     setEditBuffer(resetTableEditBuffer(editBuffer));
+    setLastDeletedRowIds([]);
     setSelection(EMPTY_GRID_SELECTION);
     setEditingCell(null);
     setEditingValue('');
@@ -550,6 +577,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
             });
           } catch (refreshErr) {
             setEditBuffer(null);
+            setLastDeletedRowIds([]);
             setSelection(EMPTY_GRID_SELECTION);
             setEditingCell(null);
             setEditingValue('');
@@ -731,6 +759,8 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
                           onEditCommit={handleEditCommit}
                           onEditCancel={handleEditCancel}
                           onDeleteAction={handleDeleteAction}
+                          onEscapeAction={handleEscapeAction}
+                          restorableDeletedRowIds={lastDeletedRowIds}
                         />
                       </div>
                     )

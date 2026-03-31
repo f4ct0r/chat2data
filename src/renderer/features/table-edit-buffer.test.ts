@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createTableEditBuffer,
   markTableEditRowDeleted,
+  restoreTableEditRows,
   updateTableEditCell,
 } from './table-edit-buffer';
 
@@ -91,6 +92,45 @@ describe('table edit buffer', () => {
       changedColumns: [],
       pendingRow: {
         id: 1,
+        name: 'Mina',
+      },
+    });
+  });
+
+  it('restores a deleted row batch without discarding prior committed cell edits', () => {
+    const buffer = createTableEditBuffer(
+      [
+        {
+          id: 1,
+          name: 'Ada',
+        },
+        {
+          id: 2,
+          name: 'Mina',
+        },
+      ],
+      ['id']
+    );
+
+    const editedBuffer = updateTableEditCell(buffer, buffer.rows[0].rowId, 'name', 'Nina');
+    const deletedBuffer = markTableEditRowDeleted(editedBuffer, buffer.rows[1].rowId);
+    const restoredBuffer = restoreTableEditRows(deletedBuffer, [buffer.rows[1].rowId]);
+
+    expect(restoredBuffer.rows[0]).toMatchObject({
+      rowId: buffer.rows[0].rowId,
+      deleted: false,
+      changedColumns: ['name'],
+      pendingRow: {
+        id: 1,
+        name: 'Nina',
+      },
+    });
+    expect(restoredBuffer.rows[1]).toMatchObject({
+      rowId: buffer.rows[1].rowId,
+      deleted: false,
+      changedColumns: [],
+      pendingRow: {
+        id: 2,
         name: 'Mina',
       },
     });

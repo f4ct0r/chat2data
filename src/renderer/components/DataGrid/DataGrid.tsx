@@ -13,9 +13,11 @@ import {
 import {
   GridCellSelection,
   GridDeleteAction,
+  GridEscapeAction,
   GridSelectionState,
   resolveGridCellSelectionRequest,
   resolveGridDeleteKeyboardInteraction,
+  resolveGridEscapeKeyboardInteraction,
   resolveGridEditStartRequest,
   resolveGridRowSelectionRequest,
 } from './data-grid-editing-state';
@@ -36,6 +38,8 @@ interface DataGridProps {
   onEditCommit?: () => void;
   onEditCancel?: () => void;
   onDeleteAction?: (action: GridDeleteAction) => void;
+  onEscapeAction?: (action: GridEscapeAction) => void;
+  restorableDeletedRowIds?: string[];
 }
 
 type ViewportSize = {
@@ -74,6 +78,8 @@ const DataGrid: React.FC<DataGridProps> = ({
   onEditCommit,
   onEditCancel,
   onDeleteAction,
+  onEscapeAction,
+  restorableDeletedRowIds = [],
 }) => {
   const { t } = useI18n();
   const gridKeyboardTargetRef = useRef<HTMLDivElement>(null);
@@ -291,6 +297,20 @@ const DataGrid: React.FC<DataGridProps> = ({
     event: React.KeyboardEvent<HTMLDivElement>
   ) => {
     if (!editablePreview) {
+      return;
+    }
+
+    const nextEscapeInteraction = resolveGridEscapeKeyboardInteraction({
+      isEditingCell: Boolean(editablePreview.editingCell),
+      key: event.key,
+      restorableDeletedRowIds,
+      canHandleEscapeAction: Boolean(onEscapeAction),
+    });
+
+    if (nextEscapeInteraction.shouldPreventDefault) {
+      event.preventDefault();
+      event.stopPropagation();
+      onEscapeAction?.(nextEscapeInteraction.action);
       return;
     }
 

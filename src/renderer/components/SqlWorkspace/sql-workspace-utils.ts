@@ -13,7 +13,7 @@ const getErrorMessage = (error: unknown) => {
   return String(error);
 };
 
-const formatEditingValue = (value: unknown) => {
+export const formatEditablePreviewValue = (value: unknown) => {
   if (value === null) {
     return '';
   }
@@ -25,7 +25,7 @@ const formatEditingValue = (value: unknown) => {
   return String(value);
 };
 
-const findBufferRow = (
+export const findEditablePreviewBufferRow = (
   editBuffer: TableEditBuffer,
   editingCell: GridCellSelection
 ): TableEditBufferRow | undefined =>
@@ -69,7 +69,7 @@ export const coerceEditablePreviewCellValue = (
   rawValue: string,
   currentValue: unknown
 ) => {
-  if (rawValue === formatEditingValue(currentValue)) {
+  if (rawValue === formatEditablePreviewValue(currentValue)) {
     return currentValue;
   }
 
@@ -108,7 +108,7 @@ export const getEditablePreviewApplyBuffer = ({
     return editBuffer;
   }
 
-  const row = findBufferRow(editBuffer, editingCell);
+  const row = findEditablePreviewBufferRow(editBuffer, editingCell);
   if (!row) {
     return editBuffer;
   }

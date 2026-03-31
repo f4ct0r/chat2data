@@ -170,6 +170,25 @@ export const markTableEditRowDeleted = (
     changedColumns: [],
   }));
 
+export const restoreTableEditRows = (
+  buffer: TableEditBuffer,
+  rowIds: string[]
+) => {
+  const rowIdSet = new Set(rowIds);
+
+  return {
+    ...buffer,
+    rows: buffer.rows.map((row) =>
+      rowIdSet.has(row.rowId)
+        ? {
+            ...row,
+            deleted: false,
+          }
+        : row
+    ),
+  };
+};
+
 export const resetTableEditBuffer = (buffer: TableEditBuffer): TableEditBuffer => ({
   ...buffer,
   rows: buffer.rows.map((row) => ({

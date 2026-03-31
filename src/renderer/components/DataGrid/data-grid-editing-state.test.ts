@@ -3,6 +3,7 @@ import {
   resolveGridCellSelectionRequest,
   resolveGridDeleteAction,
   resolveGridDeleteKeyboardInteraction,
+  resolveGridEscapeKeyboardInteraction,
   resolveGridEditStartRequest,
   resolveGridRowSelection,
   resolveGridRowSelectionRequest,
@@ -199,6 +200,39 @@ describe('data grid editing state', () => {
         ctrlKey: false,
         platform: 'Win32',
         canHandleDeleteAction: true,
+      })
+    ).toEqual({
+      action: {
+        type: 'none',
+      },
+      shouldPreventDefault: false,
+    });
+  });
+
+  it('restores the most recent deleted row batch on Escape outside edit mode', () => {
+    expect(
+      resolveGridEscapeKeyboardInteraction({
+        isEditingCell: false,
+        key: 'Escape',
+        restorableDeletedRowIds: ['row-2', 'row-3'],
+        canHandleEscapeAction: true,
+      })
+    ).toEqual({
+      action: {
+        type: 'restoreDeletedRows',
+        rowIds: ['row-2', 'row-3'],
+      },
+      shouldPreventDefault: true,
+    });
+  });
+
+  it('does not restore deleted rows on Escape while a cell is being edited', () => {
+    expect(
+      resolveGridEscapeKeyboardInteraction({
+        isEditingCell: true,
+        key: 'Escape',
+        restorableDeletedRowIds: ['row-2', 'row-3'],
+        canHandleEscapeAction: true,
       })
     ).toEqual({
       action: {

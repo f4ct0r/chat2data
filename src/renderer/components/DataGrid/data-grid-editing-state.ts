@@ -48,6 +48,15 @@ export type GridDeleteAction =
   type: 'none';
     };
 
+export type GridEscapeAction =
+  | {
+      type: 'restoreDeletedRows';
+      rowIds: string[];
+    }
+  | {
+      type: 'none';
+    };
+
 export interface GridSelectionRequestResult {
   selection: GridSelectionState;
   shouldFocusGrid: boolean;
@@ -63,9 +72,21 @@ export interface GridDeleteKeyboardInteractionResult {
   shouldPreventDefault: boolean;
 }
 
+export interface GridEscapeKeyboardInteractionResult {
+  action: GridEscapeAction;
+  shouldPreventDefault: boolean;
+}
+
 export interface ResolveGridDeleteKeyboardInteractionInput
   extends ResolveGridDeleteActionInput {
   canHandleDeleteAction: boolean;
+}
+
+export interface ResolveGridEscapeKeyboardInteractionInput {
+  isEditingCell: boolean;
+  key: string;
+  restorableDeletedRowIds: string[];
+  canHandleEscapeAction: boolean;
 }
 
 const isMacPlatform = (platform: string) => /mac/i.test(platform);
@@ -331,6 +352,33 @@ export const resolveGridDeleteKeyboardInteraction = ({
 
   return {
     action,
+    shouldPreventDefault: true,
+  };
+};
+
+export const resolveGridEscapeKeyboardInteraction = ({
+  isEditingCell,
+  key,
+  restorableDeletedRowIds,
+  canHandleEscapeAction,
+}: ResolveGridEscapeKeyboardInteractionInput): GridEscapeKeyboardInteractionResult => {
+  if (
+    key !== 'Escape' ||
+    isEditingCell ||
+    !canHandleEscapeAction ||
+    restorableDeletedRowIds.length === 0
+  ) {
+    return {
+      action: { type: 'none' },
+      shouldPreventDefault: false,
+    };
+  }
+
+  return {
+    action: {
+      type: 'restoreDeletedRows',
+      rowIds: restorableDeletedRowIds,
+    },
     shouldPreventDefault: true,
   };
 };
