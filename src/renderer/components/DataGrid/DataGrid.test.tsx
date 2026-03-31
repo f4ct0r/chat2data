@@ -6,13 +6,14 @@ import {
   markTableEditRowDeleted,
   updateTableEditCell,
 } from '../../features/table-edit-buffer';
-import DataGrid, {
+import DataGrid from './DataGrid';
+import {
   MIN_COLUMN_WIDTH,
   focusGridKeyboardTarget,
   getInitialColumnWidths,
   resizeColumnWidth,
   shouldRemeasureViewport,
-} from './DataGrid';
+} from './data-grid-utils';
 
 const virtualizerState = vi.hoisted(() => ({
   items: [

@@ -4,6 +4,13 @@ import type { TableEditBuffer } from '../../features/table-edit-buffer';
 import { QueryRow, QueryResult } from '../../../shared/types';
 import { useI18n } from '../../i18n/I18nProvider';
 import {
+  focusGridKeyboardTarget,
+  getDefaultColumnWidth,
+  getInitialColumnWidths,
+  resizeColumnWidth,
+  shouldRemeasureViewport,
+} from './data-grid-utils';
+import {
   GridCellSelection,
   GridDeleteAction,
   GridSelectionState,
@@ -31,45 +38,9 @@ interface DataGridProps {
   onDeleteAction?: (action: GridDeleteAction) => void;
 }
 
-export interface GridKeyboardTarget {
-  focus: (options?: FocusOptions) => void;
-}
-
-export const MIN_COLUMN_WIDTH = 100;
-
-const getDefaultColumnWidth = (column: string) =>
-  Math.max(column.length * 10 + 32, MIN_COLUMN_WIDTH);
-
-export const getInitialColumnWidths = (
-  columns: string[],
-  existingWidths: Record<string, number> = {}
-) =>
-  columns.reduce<Record<string, number>>((widths, column) => {
-    widths[column] = existingWidths[column] ?? getDefaultColumnWidth(column);
-    return widths;
-  }, {});
-
-export const resizeColumnWidth = (currentWidth: number, deltaX: number) =>
-  Math.max(MIN_COLUMN_WIDTH, currentWidth + deltaX);
-
 type ViewportSize = {
   width: number;
   height: number;
-};
-
-export const shouldRemeasureViewport = (
-  previous: ViewportSize | null,
-  next: ViewportSize
-) => {
-  if (next.width <= 0 || next.height <= 0) {
-    return false;
-  }
-
-  if (!previous) {
-    return true;
-  }
-
-  return previous.width !== next.width || previous.height !== next.height;
 };
 
 const formatCellValue = (value: unknown) =>
@@ -94,13 +65,7 @@ const getRowState = (
   };
 };
 
-export const focusGridKeyboardTarget = (
-  target: GridKeyboardTarget | null | undefined
-) => {
-  target?.focus({ preventScroll: true });
-};
-
-export const DataGrid: React.FC<DataGridProps> = ({
+const DataGrid: React.FC<DataGridProps> = ({
   result,
   editablePreview,
   onSelectionChange,
