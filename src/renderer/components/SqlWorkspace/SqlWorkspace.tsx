@@ -44,6 +44,40 @@ export interface QueryHistoryItem {
   error?: string;
 }
 
+export const getEditablePreviewApplyError = ({
+  batchResult,
+  batchExecutionError,
+  formatFailedStatement,
+  fallbackMessage,
+}: {
+  batchResult?: {
+    ok: boolean;
+    failedStatementIndex?: number;
+    error?: string;
+  } | null;
+  batchExecutionError?: unknown;
+  formatFailedStatement?: (index: number, message: string) => string;
+  fallbackMessage?: string;
+}) => {
+  if (batchExecutionError) {
+    return getErrorMessage(batchExecutionError);
+  }
+
+  if (!batchResult || batchResult.ok) {
+    return null;
+  }
+
+  if (
+    batchResult.failedStatementIndex !== undefined &&
+    batchResult.error &&
+    formatFailedStatement
+  ) {
+    return formatFailedStatement(batchResult.failedStatementIndex + 1, batchResult.error);
+  }
+
+  return batchResult.error ?? fallbackMessage ?? null;
+};
+
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) {
     return error.message;
@@ -537,20 +571,34 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
         setPostApplyNotice(null);
 
         try {
-          const batchResult = await window.api.db.executeBatch(
-            tabConnectionId,
-            generatedSql.batchStatements
-          );
+          let batchResult;
 
-          if (!batchResult.ok) {
-            const errorMessage =
-              batchResult.failedStatementIndex !== undefined && batchResult.error
-                ? t('editablePreview.failedStatement', {
-                    index: batchResult.failedStatementIndex + 1,
-                    message: batchResult.error,
-                  })
-                : batchResult.error ?? t('errors.sqlExecution');
+          try {
+            batchResult = await window.api.db.executeBatch(
+              tabConnectionId,
+              generatedSql.batchStatements
+            );
+          } catch (batchExecutionError) {
+            setApplyError(
+              getEditablePreviewApplyError({
+                batchExecutionError,
+                fallbackMessage: t('errors.sqlExecution'),
+              }) ?? t('errors.sqlExecution')
+            );
+            return;
+          }
 
+          const errorMessage = getEditablePreviewApplyError({
+            batchResult,
+            formatFailedStatement: (index, message) =>
+              t('editablePreview.failedStatement', {
+                index,
+                message,
+              }),
+            fallbackMessage: t('errors.sqlExecution'),
+          });
+
+          if (errorMessage) {
             setApplyError(errorMessage);
             return;
           }

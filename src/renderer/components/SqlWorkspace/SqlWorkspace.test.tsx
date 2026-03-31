@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import SqlWorkspace from './SqlWorkspace';
+import SqlWorkspace, { getEditablePreviewApplyError } from './SqlWorkspace';
 
 const dataGridPropsState = vi.hoisted(() => ({
   editablePreviewPresent: false,
@@ -231,5 +231,15 @@ describe('SqlWorkspace layout', () => {
     expect(markup).toContain('editable-preview-shell');
     expect(markup).toContain('editable-preview-readonly-reason');
     expect(markup).toContain('No primary key.');
+  });
+});
+
+describe('getEditablePreviewApplyError', () => {
+  it('returns the backend rejection message when executeBatch rejects', () => {
+    expect(
+      getEditablePreviewApplyError({
+        batchExecutionError: new Error('Connection dropped'),
+      })
+    ).toBe('Connection dropped');
   });
 });
