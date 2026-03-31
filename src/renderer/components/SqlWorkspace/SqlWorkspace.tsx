@@ -14,6 +14,7 @@ import {
   createTableEditBuffer,
   markTableEditRowDeleted,
   resetTableEditBuffer,
+  TableEditBufferRow,
   TableEditBuffer,
   updateTableEditCell,
 } from '../../features/table-edit-buffer';
@@ -112,12 +113,19 @@ const formatEditingValue = (value: unknown) => {
   return String(value);
 };
 
-const coerceEditedCellValue = (rawValue: string, currentValue: unknown) => {
+export const coerceEditablePreviewCellValue = (
+  rawValue: string,
+  currentValue: unknown
+) => {
   if (rawValue === formatEditingValue(currentValue)) {
     return currentValue;
   }
 
   if (typeof currentValue === 'number') {
+    if (rawValue.trim() === '') {
+      return rawValue;
+    }
+
     const parsed = Number(rawValue);
     return Number.isFinite(parsed) ? parsed : rawValue;
   }
@@ -133,6 +141,43 @@ const coerceEditedCellValue = (rawValue: string, currentValue: unknown) => {
   }
 
   return rawValue;
+};
+
+const findBufferRow = (
+  editBuffer: TableEditBuffer,
+  editingCell: GridCellSelection
+): TableEditBufferRow | undefined =>
+  editBuffer.rows.find((candidate) => candidate.rowId === editingCell.rowId);
+
+export const getEditablePreviewApplyBuffer = ({
+  editBuffer,
+  editingCell,
+  editingValue,
+}: {
+  editBuffer: TableEditBuffer;
+  editingCell: GridCellSelection | null;
+  editingValue: string;
+}) => {
+  if (!editingCell) {
+    return editBuffer;
+  }
+
+  const row = findBufferRow(editBuffer, editingCell);
+  if (!row) {
+    return editBuffer;
+  }
+
+  const nextValue = coerceEditablePreviewCellValue(
+    editingValue,
+    row.pendingRow[editingCell.column]
+  );
+
+  return updateTableEditCell(
+    editBuffer,
+    editingCell.rowId,
+    editingCell.column,
+    nextValue
+  );
 };
 
 const { Text } = Typography;
@@ -159,13 +204,15 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
   const [refreshLockReason, setRefreshLockReason] = useState<string | null>(null);
   const [lastExecutionKind, setLastExecutionKind] = useState<'preview' | 'custom' | null>(null);
   const handledPreviewRequestRef = useRef<string | null>(null);
-  const tabType = tab?.type;
-  const tabConnectionId = tab?.connectionId;
+  const tabType = tab?.type ?? null;
+  const tabConnectionId = tab?.connectionId ?? null;
   const tabDatabase = tab?.database;
   const tabSchema = tab?.schema;
   const previewTable = tab?.previewTable;
   const completionCacheStatus = tab?.completionCacheStatus;
-  const tabRecordId = tab?.id;
+  const tabRecordId = tab?.id ?? null;
+  const tabContent = tab?.content ?? '';
+  const tabDbType = tab?.dbType;
   const pendingPreviewSql = tab?.pendingPreviewSql;
   const pendingPreviewRequestId = tab?.pendingPreviewRequestId;
   const previewTableKey = previewTable
@@ -212,9 +259,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     };
   }, [completionCacheStatus, tabConnectionId, tabDatabase, tabRecordId, tabSchema, tabType, updateTab]);
 
-  if (!tab) return null;
-
-  const executableSql = resolveExecutableSql(tab.content || '', executionTarget);
+  const executableSql = resolveExecutableSql(tabContent, executionTarget);
   const hasLineSelection = Boolean(executionTarget?.hasSelection);
   const displayState = getExecutionDisplayState(result, error);
   const pendingChangeCount = getPendingChangeCount(editBuffer);
@@ -437,7 +482,11 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
   };
 
   const handleReplay = (sql: string) => {
-    updateTab(tab.id, { content: sql });
+    if (!tabRecordId) {
+      return;
+    }
+
+    updateTab(tabRecordId, { content: sql });
     // setTimeout to allow state update before execute, or just rely on the user to click execute
   };
 
@@ -450,7 +499,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
       return;
     }
 
-    const row = editBuffer.rows.find((candidate) => candidate.rowId === cell.rowId);
+    const row = findBufferRow(editBuffer, cell);
     if (!row) {
       return;
     }
@@ -466,14 +515,14 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
       return;
     }
 
-    const row = editBuffer.rows.find((candidate) => candidate.rowId === editingCell.rowId);
+    const row = findBufferRow(editBuffer, editingCell);
     if (!row) {
       setEditingCell(null);
       setEditingValue('');
       return;
     }
 
-    const nextValue = coerceEditedCellValue(
+    const nextValue = coerceEditablePreviewCellValue(
       editingValue,
       row.pendingRow[editingCell.column]
     );
@@ -543,7 +592,12 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
       return;
     }
 
-    const generatedSql = generateTableEditSql(editBuffer, previewTable);
+    const applyBuffer = getEditablePreviewApplyBuffer({
+      editBuffer,
+      editingCell,
+      editingValue,
+    });
+    const generatedSql = generateTableEditSql(applyBuffer, previewTable);
 
     if (!generatedSql.ok) {
       setApplyError(generatedSql.unsupportedValue.reason);
@@ -659,6 +713,10 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
         }
       : undefined;
 
+  if (!tab) {
+    return null;
+  }
+
   return (
     <div className="flex flex-col flex-1 min-h-0 w-full bg-[#0a0a0a]">
       <div className="border-b border-[#333333] bg-[#050505] flex flex-col" style={{ height: '300px', minHeight: '150px' }}>
@@ -698,14 +756,20 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
         </div>
         <div className="p-3 bg-[#0a0a0a] flex-1 min-h-0 flex flex-col">
           <SqlEditor
-            value={tab.content || ''}
-            onChange={(val) => updateTab(tab.id, { content: val })}
+            value={tabContent}
+            onChange={(val) => {
+              if (!tabRecordId) {
+                return;
+              }
+
+              updateTab(tabRecordId, { content: val });
+            }}
             onExecute={handleExecute}
             onExecutionTargetChange={setExecutionTarget}
-            connectionId={tab.connectionId}
-            dbType={tab.dbType}
-            database={tab.database}
-            schema={tab.schema}
+            connectionId={tabConnectionId ?? ''}
+            dbType={tabDbType}
+            database={tabDatabase}
+            schema={tabSchema}
             height="100%"
           />
         </div>

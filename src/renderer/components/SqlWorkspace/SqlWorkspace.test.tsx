@@ -1,7 +1,13 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import SqlWorkspace, { getEditablePreviewApplyError } from './SqlWorkspace';
+import { createTableEditBuffer } from '../../features/table-edit-buffer';
+import { generateTableEditSql } from '../../features/table-edit-sql';
+import SqlWorkspace, {
+  coerceEditablePreviewCellValue,
+  getEditablePreviewApplyBuffer,
+  getEditablePreviewApplyError,
+} from './SqlWorkspace';
 
 const dataGridPropsState = vi.hoisted(() => ({
   editablePreviewPresent: false,
@@ -241,5 +247,75 @@ describe('getEditablePreviewApplyError', () => {
         batchExecutionError: new Error('Connection dropped'),
       })
     ).toBe('Connection dropped');
+  });
+});
+
+describe('getEditablePreviewApplyBuffer', () => {
+  const previewTable = {
+    dbType: 'postgres' as const,
+    database: 'analytics',
+    schema: 'public',
+    table: 'users',
+    previewSql: 'SELECT * FROM "analytics"."public"."users" LIMIT 100',
+  };
+
+  it('flushes the active editing draft into the effective apply buffer', () => {
+    const buffer = createTableEditBuffer([{ id: 1, name: 'Ada' }], ['id']);
+    const rowId = buffer.rows[0].rowId;
+    const effectiveBuffer = getEditablePreviewApplyBuffer({
+      editBuffer: buffer,
+      editingCell: {
+        rowId,
+        column: 'name',
+      },
+      editingValue: 'Mina',
+    });
+
+    const result = generateTableEditSql(effectiveBuffer, previewTable);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    expect(result.batchStatements).toEqual([
+      'UPDATE "analytics"."public"."users" SET "name" = \'Mina\' WHERE "id" = 1',
+    ]);
+  });
+});
+
+describe('coerceEditablePreviewCellValue', () => {
+  it('does not coerce a blank numeric input to zero', () => {
+    expect(coerceEditablePreviewCellValue('', 7)).toBe('');
+  });
+
+  it('keeps a blank numeric draft out of generated SQL zero-coercion', () => {
+    const previewTable = {
+      dbType: 'postgres' as const,
+      database: 'analytics',
+      schema: 'public',
+      table: 'users',
+      previewSql: 'SELECT * FROM "analytics"."public"."users" LIMIT 100',
+    };
+    const buffer = createTableEditBuffer([{ id: 1, score: 7 }], ['id']);
+    const rowId = buffer.rows[0].rowId;
+    const effectiveBuffer = getEditablePreviewApplyBuffer({
+      editBuffer: buffer,
+      editingCell: {
+        rowId,
+        column: 'score',
+      },
+      editingValue: '',
+    });
+    const result = generateTableEditSql(effectiveBuffer, previewTable);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    expect(result.batchStatements).toEqual([
+      'UPDATE "analytics"."public"."users" SET "score" = \'\' WHERE "id" = 1',
+    ]);
   });
 });
