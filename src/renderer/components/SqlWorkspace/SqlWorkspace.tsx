@@ -6,7 +6,6 @@ import { Button, Tabs, Modal, Typography } from 'antd';
 import { CaretRightOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { QueryResult, TableEditMetadata } from '../../../shared/types';
 import { useTabStore } from '../../store/tabStore';
-import { SqlClassifier, SqlRiskLevel } from '../../../core/security/sql-classifier';
 import { emitGlobalError } from '../../utils/errorBus';
 import { resolveExecutableSql, SqlExecutionTarget } from '../SqlEditor/sql-execution';
 import { useI18n } from '../../i18n/i18n-context';
@@ -39,6 +38,7 @@ import {
   getEditablePreviewApplyBuffer,
   getEditablePreviewApplyError,
 } from './sql-workspace-utils';
+import { summarizeDangerousSql } from './sql-dangerous-summary';
 
 interface SqlWorkspaceProps {
   tabId: string;
@@ -367,13 +367,31 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     setApplyError(null);
     setPostApplyNotice(null);
 
-    const classification = SqlClassifier.classify(executableSql);
+    const dangerousSummary = summarizeDangerousSql(executableSql);
 
-    if (classification.level === SqlRiskLevel.DANGEROUS) {
+    if (dangerousSummary) {
       Modal.confirm({
         title: t('sql.dangerousTitle'),
         icon: <ExclamationCircleOutlined className="text-red-500" />,
-        content: t('sql.dangerousContent', { operation: classification.operation }),
+        content: (
+          <div className="font-mono text-xs text-[#737373]">
+            <div>
+              {t('sql.dangerousBatchContent', {
+                count: dangerousSummary.totalDangerousStatementCount,
+              })}
+            </div>
+            <div className="mt-2 space-y-1">
+              {dangerousSummary.operations.map(({ operation, count }) => (
+                <div key={operation}>
+                  {t('sql.dangerousBatchItem', {
+                    count,
+                    operation,
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        ),
         okText: t('sql.confirmExecute'),
         okType: 'danger',
         cancelText: t('common.cancel'),
@@ -398,8 +416,12 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
       return;
     }
 
-    updateTab(tabRecordId, { content: sql });
-    // setTimeout to allow state update before execute, or just rely on the user to click execute
+    updateTab(tabRecordId, {
+      content: sql,
+      pendingAutoExecute: {
+        kind: 'query-history-replay',
+      },
+    });
   };
 
   const handleSelectionChange = (nextSelection: GridSelectionState) => {
@@ -614,13 +636,13 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
         }
       },
       content: (
-        <div className="font-mono text-xs text-[#d4d4d4]">
+        <div className="font-mono text-xs text-[#737373]">
           <div>{t('editablePreview.confirmUpdates', { count: updateCount })}</div>
           <div>{t('editablePreview.confirmDeletes', { count: deleteCount })}</div>
-          <div className="mt-3 text-[#737373]">
+          <div className="mt-3 text-[#a3a3a3]">
             {t('editablePreview.confirmSqlPreview')}
           </div>
-          <pre className="mt-2 max-h-48 overflow-auto rounded border border-[#333333] bg-[#050505] p-3 whitespace-pre-wrap text-[#d4d4d4]">
+          <pre className="mt-2 max-h-48 overflow-auto rounded border border-[#333333] bg-[#050505] p-3 whitespace-pre-wrap text-[#737373]">
             {generatedSql.previewSql}
           </pre>
         </div>

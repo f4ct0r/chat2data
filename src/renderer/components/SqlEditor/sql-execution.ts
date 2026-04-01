@@ -4,7 +4,7 @@ export interface SqlExecutionTarget {
   hasSelection: boolean;
 }
 
-interface SqlStatementRange {
+export interface SqlStatementRange {
   sql: string;
   startLineNumber: number;
   endLineNumber: number;
@@ -41,11 +41,25 @@ const getTrimmedLineRange = (segment: string, startLineNumber: number) => {
   };
 };
 
-const parseSqlStatements = (content: string): SqlStatementRange[] => {
+const matchDollarQuoteTag = (content: string, index: number) => {
+  const remainder = content.slice(index);
+  const match = remainder.match(/^\$[A-Za-z0-9_]*\$/);
+
+  return match?.[0] ?? null;
+};
+
+export const splitSqlStatements = (content: string): SqlStatementRange[] => {
   const statements: SqlStatementRange[] = [];
   let currentStartIndex = 0;
   let currentStartLineNumber = 1;
   let currentLineNumber = 1;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inBacktickQuote = false;
+  let inBracketIdentifier = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+  let dollarQuoteTag: string | null = null;
 
   const pushStatement = (endIndexExclusive: number) => {
     const segment = content.slice(currentStartIndex, endIndexExclusive);
@@ -63,6 +77,148 @@ const parseSqlStatements = (content: string): SqlStatementRange[] => {
 
   for (let index = 0; index < content.length; index += 1) {
     const character = content[index];
+    const nextCharacter = content[index + 1];
+
+    if (inLineComment) {
+      if (character === '\n') {
+        inLineComment = false;
+        currentLineNumber += 1;
+        if (currentStartIndex === index + 1) {
+          currentStartLineNumber = currentLineNumber;
+        }
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (character === '\n') {
+        currentLineNumber += 1;
+      }
+
+      if (character === '*' && nextCharacter === '/') {
+        inBlockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (dollarQuoteTag) {
+      const closingTag = dollarQuoteTag;
+
+      if (content.startsWith(closingTag, index)) {
+        dollarQuoteTag = null;
+        index += closingTag.length - 1;
+        continue;
+      }
+
+      if (character === '\n') {
+        currentLineNumber += 1;
+      }
+      continue;
+    }
+
+    if (inSingleQuote) {
+      if (character === '\n') {
+        currentLineNumber += 1;
+      }
+
+      if (character === '\'' && nextCharacter === '\'') {
+        index += 1;
+        continue;
+      }
+
+      if (character === '\'') {
+        inSingleQuote = false;
+      }
+      continue;
+    }
+
+    if (inDoubleQuote) {
+      if (character === '\n') {
+        currentLineNumber += 1;
+      }
+
+      if (character === '"' && nextCharacter === '"') {
+        index += 1;
+        continue;
+      }
+
+      if (character === '"') {
+        inDoubleQuote = false;
+      }
+      continue;
+    }
+
+    if (inBacktickQuote) {
+      if (character === '\n') {
+        currentLineNumber += 1;
+      }
+
+      if (character === '`' && nextCharacter === '`') {
+        index += 1;
+        continue;
+      }
+
+      if (character === '`') {
+        inBacktickQuote = false;
+      }
+      continue;
+    }
+
+    if (inBracketIdentifier) {
+      if (character === '\n') {
+        currentLineNumber += 1;
+      }
+
+      if (character === ']' && nextCharacter === ']') {
+        index += 1;
+        continue;
+      }
+
+      if (character === ']') {
+        inBracketIdentifier = false;
+      }
+      continue;
+    }
+
+    if (character === '-' && nextCharacter === '-') {
+      inLineComment = true;
+      index += 1;
+      continue;
+    }
+
+    if (character === '/' && nextCharacter === '*') {
+      inBlockComment = true;
+      index += 1;
+      continue;
+    }
+
+    const matchedDollarQuoteTag = character === '$' ? matchDollarQuoteTag(content, index) : null;
+    if (matchedDollarQuoteTag) {
+      dollarQuoteTag = matchedDollarQuoteTag;
+      index += matchedDollarQuoteTag.length - 1;
+      continue;
+    }
+
+    if (character === '\'') {
+      inSingleQuote = true;
+      continue;
+    }
+
+    if (character === '"') {
+      inDoubleQuote = true;
+      continue;
+    }
+
+    if (character === '`') {
+      inBacktickQuote = true;
+      continue;
+    }
+
+    if (character === '[') {
+      inBracketIdentifier = true;
+      continue;
+    }
 
     if (character === ';') {
       pushStatement(index + 1);
@@ -114,7 +270,7 @@ export const resolveExecutableSql = (
     return content.trim();
   }
 
-  const statements = parseSqlStatements(content);
+  const statements = splitSqlStatements(content);
 
   if (!target) {
     return content.trim();

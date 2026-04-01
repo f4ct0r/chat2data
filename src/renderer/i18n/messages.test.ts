@@ -34,4 +34,11 @@ describe('renderer i18n messages', () => {
     expect(messages['zh-CN']['scripts.loadIntoNewEditor']).toBeDefined();
     expect(messages['en-US']['scripts.executeNow']).toBeDefined();
   });
+
+  it('contains dangerous batch confirmation strings in both supported languages', () => {
+    expect(messages['zh-CN']['sql.dangerousBatchContent']).toBeDefined();
+    expect(messages['zh-CN']['sql.dangerousBatchItem']).toBeDefined();
+    expect(messages['en-US']['sql.dangerousBatchContent']).toBeDefined();
+    expect(messages['en-US']['sql.dangerousBatchItem']).toBeDefined();
+  });
 });
