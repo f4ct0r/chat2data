@@ -111,7 +111,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
   const tabDbType = tab?.dbType;
   const pendingPreviewSql = tab?.pendingPreviewSql;
   const pendingPreviewRequestId = tab?.pendingPreviewRequestId;
-  const pendingAutoExecute = tab?.pendingAutoExecute ?? false;
+  const pendingAutoExecute = tab?.pendingAutoExecute ?? null;
   const previewTableKey = previewTable
     ? [
         previewTable.dbType,
@@ -156,7 +156,11 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     };
   }, [completionCacheStatus, tabConnectionId, tabDatabase, tabRecordId, tabSchema, tabType, updateTab]);
 
-  const executableSql = resolveExecutableSql(tabContent, executionTarget);
+  const executableSql = resolveExecutableSql(
+    tabContent,
+    executionTarget,
+    pendingAutoExecute ? 'full-content' : 'editor-targeted'
+  );
   const hasLineSelection = Boolean(executionTarget?.hasSelection);
   const displayState = getExecutionDisplayState(result, error);
   const pendingChangeCount = getPendingChangeCount(editBuffer);
@@ -385,7 +389,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
       return;
     }
 
-    updateTab(tabRecordId, { pendingAutoExecute: false });
+    updateTab(tabRecordId, { pendingAutoExecute: null });
     void handleExecute();
   }, [handleExecute, pendingAutoExecute, tabRecordId, tabType, updateTab]);
 

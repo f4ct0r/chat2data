@@ -53,4 +53,18 @@ WHERE created_at < NOW() - INTERVAL '7 days';
       })
     ).toBe('SELECT *\nFROM users;');
   });
+
+  it('returns the full rendered script for auto-execute runs', () => {
+    expect(
+      resolveExecutableSql(
+        sql,
+        {
+          startLineNumber: 4,
+          endLineNumber: 8,
+          hasSelection: true,
+        },
+        'full-content'
+      )
+    ).toBe(sql);
+  });
 });

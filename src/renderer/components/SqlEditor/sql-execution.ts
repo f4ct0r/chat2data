@@ -10,6 +10,8 @@ interface SqlStatementRange {
   endLineNumber: number;
 }
 
+export type SqlExecutionMode = 'editor-targeted' | 'full-content';
+
 const getTrimmedLineRange = (segment: string, startLineNumber: number) => {
   const lines = segment.split('\n');
   let firstContentLineIndex = -1;
@@ -103,7 +105,15 @@ const getNearestStatement = (statements: SqlStatementRange[], lineNumber: number
   }, null);
 };
 
-export const resolveExecutableSql = (content: string, target: SqlExecutionTarget | null) => {
+export const resolveExecutableSql = (
+  content: string,
+  target: SqlExecutionTarget | null,
+  mode: SqlExecutionMode = 'editor-targeted'
+) => {
+  if (mode === 'full-content') {
+    return content.trim();
+  }
+
   const statements = parseSqlStatements(content);
 
   if (!target) {

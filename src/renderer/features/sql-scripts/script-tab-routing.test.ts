@@ -79,7 +79,9 @@ describe('script tab routing', () => {
       schema: 'public',
       content: 'SELECT * FROM users',
       completionCacheStatus: 'idle',
-      pendingAutoExecute: true,
+      pendingAutoExecute: {
+        kind: 'script-execute-now',
+      },
     });
   });
 });

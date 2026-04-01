@@ -52,5 +52,5 @@ export const buildSqlTabFromScript = ({
   database: databaseName,
   schema: getDefaultSchemaForDbType(selectedConnection.dbType, databaseName),
   completionCacheStatus: 'idle',
-  pendingAutoExecute: executeNow,
+  pendingAutoExecute: executeNow ? { kind: 'script-execute-now' } : null,
 });

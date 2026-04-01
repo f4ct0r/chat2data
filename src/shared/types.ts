@@ -52,6 +52,10 @@ export interface CompletionSchemaIndex {
 export type CompletionCacheStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type TabType = 'sql' | 'chat' | 'script';
 
+export interface PendingAutoExecuteRequest {
+  kind: 'script-execute-now';
+}
+
 export interface PreviewTableRef {
   dbType: ConnectionConfig['dbType'];
   database?: string;
@@ -92,7 +96,7 @@ export interface TabData {
   pendingPreviewRequestId?: string;
   scriptId?: string;
   scriptDatabaseName?: string;
-  pendingAutoExecute?: boolean;
+  pendingAutoExecute?: PendingAutoExecuteRequest | null;
 }
 
 export interface StorageVerificationResult {
