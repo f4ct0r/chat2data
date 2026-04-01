@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { connectionManager } from '../connection-manager';
 import { DatabaseDriver } from '../types';
@@ -56,7 +57,7 @@ describe('ConnectionManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     connectionManagerState.connections.clear();
-    vi.mocked(sqliteService.getDb).mockReturnValue(mockDb);
+    vi.mocked(sqliteService.getDb).mockReturnValue(mockDb as unknown as Database.Database);
   });
 
   it('should fetch config from storage and decrypt password', async () => {
@@ -220,7 +221,7 @@ describe('ConnectionManager', () => {
         reason: 'Editing is not supported for this database.',
         key: null
       })
-    } as DatabaseDriver);
+    } as unknown as DatabaseDriver);
 
     await expect(
       connectionManager.executeBatch('conn-id-7', ['UPDATE users SET name = "A"'])

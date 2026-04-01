@@ -9,6 +9,7 @@ import {
   PreviewTableRef,
   TableEditMetadata,
 } from '../shared/types';
+import { SqlScript, SqlScriptInput } from '../shared/sql-scripts';
 
 const api: ElectronAPI = {
   window: {
@@ -23,6 +24,14 @@ const api: ElectronAPI = {
       ipcRenderer.invoke(IpcChannels.STORAGE_GET_CONNECTIONS),
     deleteConnection: (id: string) => 
       ipcRenderer.invoke(IpcChannels.STORAGE_DELETE_CONNECTION, id),
+    listSqlScripts: (connectionId: string, databaseName: string) =>
+      ipcRenderer.invoke(IpcChannels.STORAGE_LIST_SQL_SCRIPTS, connectionId, databaseName) as Promise<SqlScript[]>,
+    getSqlScript: (scriptId: string) =>
+      ipcRenderer.invoke(IpcChannels.STORAGE_GET_SQL_SCRIPT, scriptId) as Promise<SqlScript | null>,
+    saveSqlScript: (input: SqlScriptInput) =>
+      ipcRenderer.invoke(IpcChannels.STORAGE_SAVE_SQL_SCRIPT, input) as Promise<SqlScript>,
+    deleteSqlScript: (scriptId: string) =>
+      ipcRenderer.invoke(IpcChannels.STORAGE_DELETE_SQL_SCRIPT, scriptId),
   },
   db: {
     testConnection: (config: ConnectionConfig | { id: string }) => 

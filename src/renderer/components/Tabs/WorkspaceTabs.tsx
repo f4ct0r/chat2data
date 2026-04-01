@@ -4,6 +4,7 @@ import { useTabStore } from '../../store/tabStore';
 import { CodeOutlined, MessageOutlined } from '@ant-design/icons';
 import SqlWorkspace from '../SqlWorkspace/SqlWorkspace';
 import ChatPanel from '../Chat/ChatPanel';
+import SqlScriptWorkspace from '../SqlScripts/SqlScriptWorkspace';
 import { useI18n } from '../../i18n/i18n-context';
 
 type TargetKey = React.MouseEvent | React.KeyboardEvent | string;
@@ -57,7 +58,10 @@ const WorkspaceTabs: React.FC = () => {
   }
 
   const tabItems = tabs.map(tab => {
-    const icon = tab.type === 'sql' ? <CodeOutlined className="text-[#00ff00]" /> : <MessageOutlined className="text-[#FF5722]" />;
+    const icon =
+      tab.type === 'chat'
+        ? <MessageOutlined className="text-[#FF5722]" />
+        : <CodeOutlined className={tab.type === 'script' ? 'text-[#FFB347]' : 'text-[#00ff00]'} />;
     return {
       label: (
         <span className="font-mono text-xs tracking-wider">
@@ -69,6 +73,8 @@ const WorkspaceTabs: React.FC = () => {
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-[#050505] rounded-b-sm border-x border-b border-[#333333] shadow-[0_0_10px_rgba(0,0,0,0.8)]">
           {tab.type === 'sql' ? (
             <SqlWorkspace tabId={tab.id} />
+          ) : tab.type === 'script' ? (
+            <SqlScriptWorkspace tabId={tab.id} />
           ) : (
             <ChatPanel tabId={tab.id} />
           )}

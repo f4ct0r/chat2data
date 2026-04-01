@@ -8,6 +8,10 @@ export enum IpcChannels {
   STORAGE_SAVE_CONNECTION = 'storage:saveConnection',
   STORAGE_GET_CONNECTIONS = 'storage:getConnections',
   STORAGE_DELETE_CONNECTION = 'storage:deleteConnection',
+  STORAGE_LIST_SQL_SCRIPTS = 'storage:listSqlScripts',
+  STORAGE_GET_SQL_SCRIPT = 'storage:getSqlScript',
+  STORAGE_SAVE_SQL_SCRIPT = 'storage:saveSqlScript',
+  STORAGE_DELETE_SQL_SCRIPT = 'storage:deleteSqlScript',
 
   // Database
   DB_TEST_CONNECTION = 'db:testConnection',

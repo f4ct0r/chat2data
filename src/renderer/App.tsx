@@ -12,8 +12,16 @@ import { SidebarView } from './components/Layout/Sidebar';
 import PrivacyConsentDialog from './components/Settings/PrivacyConsentDialog';
 import { emitGlobalError } from './utils/errorBus';
 import { useI18n } from './i18n/i18n-context';
-import { resolvePreviewTarget, type TablePreviewRequest } from './features/table-preview';
+import {
+  resolvePreviewTarget,
+  type PreviewTabCandidate,
+  type TablePreviewRequest,
+} from './features/table-preview';
 import { buildPreviewUpdates } from './features/preview-updates';
+import {
+  buildScriptTabDraft,
+  findOpenScriptTab,
+} from './features/sql-scripts/script-tab-routing';
 
 const { Title, Text } = Typography;
 
@@ -144,13 +152,66 @@ const App: React.FC = () => {
     }
   };
 
+  const handleOpenScriptTab = (scriptId: string, databaseName: string, title: string) => {
+    if (!selectedConnection) {
+      return;
+    }
+
+    const existingScriptTab = findOpenScriptTab(tabs, scriptId);
+    if (existingScriptTab) {
+      setActiveTab(existingScriptTab.id);
+      setActiveView('connections');
+      return;
+    }
+
+    addTab(
+      buildScriptTabDraft({
+        selectedConnection,
+        databaseName,
+        title,
+        scriptId,
+      })
+    );
+    setActiveView('connections');
+  };
+
+  const handleCreateScriptTab = (databaseName: string) => {
+    if (!selectedConnection) {
+      return;
+    }
+
+    addTab(
+      buildScriptTabDraft({
+        selectedConnection,
+        databaseName,
+        title: `New Script (${databaseName})`,
+      })
+    );
+    setActiveView('connections');
+  };
+
   const handlePreviewTable = (request: TablePreviewRequest) => {
     if (!selectedConnection || selectedConnection.id !== request.connectionId) {
       return;
     }
 
     const target = resolvePreviewTarget({
-      tabs,
+      tabs: tabs.flatMap<PreviewTabCandidate>((tab) => {
+        if (tab.type !== 'sql' && tab.type !== 'chat') {
+          return [];
+        }
+
+        return [
+          {
+            id: tab.id,
+            type: tab.type,
+            connectionId: tab.connectionId,
+            dbType: tab.dbType,
+            database: tab.database,
+            schema: tab.schema,
+          },
+        ];
+      }),
       activeTabId,
       request,
       selectedConnection,
@@ -263,6 +324,8 @@ const App: React.FC = () => {
                     connectionType={selectedConnection?.dbType} 
                     connectionDatabase={selectedConnection?.database}
                     onPreviewTable={handlePreviewTable}
+                    onOpenScript={handleOpenScriptTab}
+                    onCreateScript={handleCreateScriptTab}
                   />
                 </div>
               )}

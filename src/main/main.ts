@@ -7,8 +7,10 @@ import { connectionManager } from '../core/db/connection-manager';
 import { QueryExecutor } from '../core/executor/query-executor';
 import { ChatAgent, AgentContext } from '../core/agent/chat-agent';
 import { AppLanguage, ConnectionConfig, LlmProvider, PreviewTableRef } from '../shared/types';
+import { SqlScriptInput } from '../shared/sql-scripts';
 import { randomUUID } from 'crypto';
 import { completionSchemaService } from '../core/agent/completion-schema-service';
+import { sqlScriptStore } from '../core/storage/sql-script-store';
 
 const shouldOpenDevTools = process.env.CHAT2DATA_OPEN_DEVTOOLS === 'true';
 
@@ -146,6 +148,22 @@ app.whenReady().then(() => {
   ipcMain.handle(IpcChannels.STORAGE_DELETE_CONNECTION, async (_event, id: string) => {
     const db = sqliteService.getDb();
     db.prepare('DELETE FROM connections WHERE id = ?').run(id);
+  });
+
+  ipcMain.handle(IpcChannels.STORAGE_LIST_SQL_SCRIPTS, async (_event, connectionId: string, databaseName: string) => {
+    return sqlScriptStore.list(connectionId, databaseName);
+  });
+
+  ipcMain.handle(IpcChannels.STORAGE_GET_SQL_SCRIPT, async (_event, scriptId: string) => {
+    return sqlScriptStore.get(scriptId);
+  });
+
+  ipcMain.handle(IpcChannels.STORAGE_SAVE_SQL_SCRIPT, async (_event, input: SqlScriptInput) => {
+    return sqlScriptStore.save(input);
+  });
+
+  ipcMain.handle(IpcChannels.STORAGE_DELETE_SQL_SCRIPT, async (_event, scriptId: string) => {
+    sqlScriptStore.delete(scriptId);
   });
 
   // Database Handlers

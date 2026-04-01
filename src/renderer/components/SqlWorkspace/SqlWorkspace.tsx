@@ -111,6 +111,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
   const tabDbType = tab?.dbType;
   const pendingPreviewSql = tab?.pendingPreviewSql;
   const pendingPreviewRequestId = tab?.pendingPreviewRequestId;
+  const pendingAutoExecute = tab?.pendingAutoExecute ?? false;
   const previewTableKey = previewTable
     ? [
         previewTable.dbType,
@@ -186,6 +187,8 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
 
   useEffect(() => {
     if (
+      !tabConnectionId ||
+      !previewTable ||
       !shouldLoadEditablePreviewMetadata({
         connectionId: tabConnectionId,
         previewTable,
@@ -354,7 +357,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
       });
   }, [pendingPreviewRequestId, pendingPreviewSql, performExecution, tabRecordId, tabType, updateTab]);
 
-  const handleExecute = async () => {
+  const handleExecute = React.useCallback(async () => {
     if (!executableSql) return;
 
     setApplyError(null);
@@ -375,7 +378,16 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     } else {
       void performExecution(executableSql).catch(() => undefined);
     }
-  };
+  }, [executableSql, performExecution, t]);
+
+  useEffect(() => {
+    if (!tabRecordId || tabType !== 'sql' || !pendingAutoExecute) {
+      return;
+    }
+
+    updateTab(tabRecordId, { pendingAutoExecute: false });
+    void handleExecute();
+  }, [handleExecute, pendingAutoExecute, tabRecordId, tabType, updateTab]);
 
   const handleReplay = (sql: string) => {
     if (!tabRecordId) {

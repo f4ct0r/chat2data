@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
+import type { TabData } from '../../../shared/types';
 import { createTableEditBuffer } from '../../features/table-edit-buffer';
 import { generateTableEditSql } from '../../features/table-edit-sql';
 import SqlWorkspace from './SqlWorkspace';
@@ -18,6 +19,11 @@ const editablePreviewViewState = vi.hoisted(() => ({
   current: {
     mode: 'hidden' as 'hidden' | 'editable' | 'read-only',
     showToolbar: false,
+  } as {
+    mode: 'hidden' | 'editable' | 'read-only';
+    showToolbar: boolean;
+    pendingChangeCount?: number;
+    readOnlyReason?: string;
   },
 }));
 
@@ -32,7 +38,7 @@ const tabsState = vi.hoisted(() => ({
       content: 'select 1;',
       completionCacheStatus: 'idle',
     },
-  ],
+  ] as TabData[],
 }));
 
 const updateTabMock = vi.hoisted(() => vi.fn());

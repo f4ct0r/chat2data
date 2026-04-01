@@ -4,13 +4,24 @@ import {
   ReloadOutlined, 
   DatabaseOutlined, 
   FolderOutlined, 
-  TableOutlined, 
-  ProfileOutlined 
+  TableOutlined,
+  ProfileOutlined,
+  CodeOutlined,
+  PlusOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { ConnectionConfig } from '../../../shared/types';
 import { useI18n } from '../../i18n/i18n-context';
 import type { TablePreviewRequest } from '../../features/table-preview';
-import { buildRootNodes, type BrowserNode } from './object-browser';
+import {
+  buildRootNodes,
+  buildSchemaNode,
+  buildScriptFolderNode,
+  buildScriptNode,
+  buildTableNode,
+  removeNodeFromTree,
+  type BrowserNode,
+} from './object-browser';
 
 const { Text } = Typography;
 
@@ -19,15 +30,21 @@ interface ObjectBrowserProps {
   connectionType?: ConnectionConfig['dbType'];
   connectionDatabase?: string;
   onPreviewTable?: (request: TablePreviewRequest) => void;
+  onOpenScript?: (scriptId: string, databaseName: string, title: string) => void;
+  onCreateScript?: (databaseName: string) => void;
+  onDeleteScript?: (scriptId: string, databaseName: string) => void;
 }
 
-type NodeType = 'root' | 'database' | 'schema' | 'table' | 'column';
+type NodeType = 'root' | 'database' | 'scriptFolder' | 'script' | 'schema' | 'table' | 'column';
 
 const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
   connectionId,
   connectionType,
   connectionDatabase,
   onPreviewTable,
+  onOpenScript,
+  onCreateScript,
+  onDeleteScript,
 }) => {
   const { t } = useI18n();
   const [treeData, setTreeData] = useState<BrowserNode[]>([]);
@@ -43,7 +60,29 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
 
       // For some DBs we might want to start with databases, for others schemas
       const dbs = await window.api.db.getDatabases(connectionId);
-      const rootNodes = buildRootNodes(dbs, connectionDatabase);
+      const rootNodes = await Promise.all(
+        buildRootNodes(dbs, connectionDatabase).map(async (rootNode) => {
+          const database = rootNode.database;
+
+          if (!database) {
+            return rootNode;
+          }
+
+          const schemas = await window.api.db.getSchemas(connectionId, database);
+
+          const objectChildren =
+            schemas.length === 1 && schemas[0] === database
+              ? (await window.api.db.getTables(connectionId, database, database)).map((table) =>
+                  buildTableNode(database, database, table)
+                )
+              : schemas.map((schema) => buildSchemaNode(database, schema));
+
+          return {
+            ...rootNode,
+            children: [buildScriptFolderNode(database), ...objectChildren],
+          };
+        })
+      );
       setTreeData(rootNodes);
     } catch (error) {
       console.error('Failed to load root nodes:', error);
@@ -64,7 +103,7 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onLoadData = async (node: any) => {
     const { key, type, database, schema, table, children } = node as BrowserNode;
-    if (children && children.length > 0) {
+    if (type === 'script' || (children && children.length > 0)) {
       return;
     }
 
@@ -73,43 +112,16 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
     try {
       let newChildren: BrowserNode[] = [];
 
-      if (type === 'database') {
-        const schemas = await window.api.db.getSchemas(connectionId, database);
-        
-        // Handle case where schemas are same as database (MySQL, ClickHouse)
-        if (schemas.length === 1 && schemas[0] === database) {
-          // Skip schema level and load tables directly
-          const tables = await window.api.db.getTables(connectionId, database, database);
-          newChildren = tables.map(t => ({
-            key: `table:${database}:${database}:${t}`,
-            title: t,
-            type: 'table',
-            database,
-            schema: database,
-            table: t,
-            isLeaf: false,
-          }));
-        } else {
-          newChildren = schemas.map(s => ({
-            key: `schema:${database}:${s}`,
-            title: s,
-            type: 'schema',
-            database,
-            schema: s,
-            isLeaf: false,
-          }));
-        }
+      if (type === 'scriptFolder') {
+        const scripts = await window.api.storage.listSqlScripts(connectionId, database ?? '');
+        newChildren = scripts.map((script) =>
+          buildScriptNode(database ?? '', script.id, script.name)
+        );
       } else if (type === 'schema') {
         const tables = await window.api.db.getTables(connectionId, database, schema);
-        newChildren = tables.map(t => ({
-          key: `table:${database}:${schema}:${t}`,
-          title: t,
-          type: 'table',
-          database,
-          schema,
-          table: t,
-          isLeaf: false,
-        }));
+        newChildren = tables.map((tableName) =>
+          buildTableNode(database ?? '', schema ?? '', tableName)
+        );
       } else if (type === 'table') {
         const columns = await window.api.db.getColumns(connectionId, database, schema, table);
         newChildren = columns.map(c => ({
@@ -155,6 +167,10 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
         return <DatabaseOutlined className="text-[#FF5722]" />;
       case 'schema':
         return <FolderOutlined className="text-[#00ff00]" />;
+      case 'scriptFolder':
+        return <CodeOutlined className="text-[#FFB347]" />;
+      case 'script':
+        return <CodeOutlined className="text-[#FFB347]" />;
       case 'table':
         return <TableOutlined className="text-[#a3a3a3]" />;
       case 'column':
@@ -216,6 +232,10 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
                   table: node.table,
                 });
               }
+
+              if (node.type === 'script' && node.scriptId && node.database) {
+                onOpenScript?.(node.scriptId, node.database, node.title);
+              }
             }}
             titleRender={(nodeData) => {
               const node = nodeData as BrowserNode;
@@ -223,6 +243,30 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
                 <div className="flex items-center gap-2 hover:text-[#FF5722] transition-colors">
                   {renderIcon(node.type)}
                   <span className="text-sm truncate font-mono" title={node.title}>{node.title}</span>
+                  {node.type === 'scriptFolder' && node.database ? (
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<PlusOutlined />}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onCreateScript?.(node.database!);
+                      }}
+                    />
+                  ) : null}
+                  {node.type === 'script' && node.scriptId && node.database ? (
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<DeleteOutlined />}
+                      onClick={async (event) => {
+                        event.stopPropagation();
+                        await window.api.storage.deleteSqlScript(node.scriptId!);
+                        setTreeData((current) => removeNodeFromTree(current, node.key));
+                        onDeleteScript?.(node.scriptId!, node.database!);
+                      }}
+                    />
+                  ) : null}
                 </div>
               );
             }}

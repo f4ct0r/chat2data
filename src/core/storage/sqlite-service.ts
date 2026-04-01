@@ -22,6 +22,8 @@ class SqliteService {
       // verbose: console.log
     });
 
+    this.db.pragma('foreign_keys = ON');
+
     this.initTables();
   }
 
@@ -46,6 +48,37 @@ class SqliteService {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS sql_scripts (
+        id TEXT PRIMARY KEY,
+        connection_id TEXT NOT NULL,
+        database_name TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        sql TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS sql_script_tags (
+        script_id TEXT NOT NULL,
+        tag TEXT NOT NULL,
+        PRIMARY KEY (script_id, tag),
+        FOREIGN KEY (script_id) REFERENCES sql_scripts(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS sql_script_parameters (
+        id TEXT PRIMARY KEY,
+        script_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        label TEXT,
+        type TEXT NOT NULL,
+        required INTEGER NOT NULL DEFAULT 0,
+        default_value TEXT,
+        position INTEGER NOT NULL,
+        FOREIGN KEY (script_id) REFERENCES sql_scripts(id) ON DELETE CASCADE,
+        UNIQUE (script_id, name)
       );
     `;
 

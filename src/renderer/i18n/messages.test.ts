@@ -27,4 +27,11 @@ describe('renderer i18n messages', () => {
     expect(messages['zh-CN']['editablePreview.refreshFailedApplied']).toBeDefined();
     expect(messages['en-US']['editablePreview.refreshFailedApplied']).toBeDefined();
   });
+
+  it('contains SQL script workspace strings in both supported languages', () => {
+    expect(messages['zh-CN']['scripts.title']).toBe('脚本');
+    expect(messages['en-US']['scripts.title']).toBe('Scripts');
+    expect(messages['zh-CN']['scripts.loadIntoNewEditor']).toBeDefined();
+    expect(messages['en-US']['scripts.executeNow']).toBeDefined();
+  });
 });

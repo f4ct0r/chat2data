@@ -9,11 +9,12 @@ import {
 const originalBuffer = globalThis.Buffer;
 
 beforeEach(() => {
-  (globalThis as typeof globalThis & { Buffer?: typeof Buffer }).Buffer = undefined;
+  (globalThis as typeof globalThis & { Buffer: typeof Buffer }).Buffer =
+    undefined as unknown as typeof Buffer;
 });
 
 afterEach(() => {
-  (globalThis as typeof globalThis & { Buffer?: typeof Buffer }).Buffer = originalBuffer;
+  (globalThis as typeof globalThis & { Buffer: typeof Buffer | undefined }).Buffer = originalBuffer;
 });
 
 describe('table edit buffer', () => {

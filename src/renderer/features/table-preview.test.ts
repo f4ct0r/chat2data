@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ConnectionConfig } from '../../shared/types';
-import type { TabData } from '../store/tabStore';
 import {
   buildPreviewTableSql,
   resolvePreviewTarget,
+  type PreviewTabCandidate,
   type TablePreviewRequest,
 } from './table-preview';
 
@@ -65,10 +65,9 @@ describe('resolvePreviewTarget', () => {
     database: 'analytics',
   };
 
-  const tabs: TabData[] = [
+  const tabs: PreviewTabCandidate[] = [
     {
       id: 'sql-1',
-      title: 'SQL 1',
       type: 'sql',
       connectionId: 'conn-1',
       dbType: 'postgres',
@@ -77,7 +76,6 @@ describe('resolvePreviewTarget', () => {
     },
     {
       id: 'chat-1',
-      title: 'Chat 1',
       type: 'chat',
       connectionId: 'conn-1',
     },
@@ -139,7 +137,6 @@ describe('resolvePreviewTarget', () => {
           ...tabs,
           {
             id: 'sql-other',
-            title: 'Other',
             type: 'sql',
             connectionId: 'conn-2',
             dbType: 'postgres',

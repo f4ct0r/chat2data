@@ -1,11 +1,10 @@
 import { create } from 'zustand';
 import {
-  CompletionCacheStatus,
   ConnectionConfig,
-  type PreviewTableRef,
+  TabData,
 } from '../../shared/types';
 
-export type TabType = 'sql' | 'chat';
+export type { TabData, TabType } from '../../shared/types';
 
 export const getDefaultSchemaForDbType = (
   dbType: ConnectionConfig['dbType'],
@@ -24,20 +23,6 @@ export const getDefaultSchemaForDbType = (
   }
 };
 
-export interface TabData {
-  id: string;
-  title: string;
-  type: TabType;
-  connectionId: string;
-  dbType?: ConnectionConfig['dbType'];
-  content?: string; // Optional content for the tab (e.g., SQL query text)
-  database?: string;
-  schema?: string;
-  previewTable?: PreviewTableRef;
-  completionCacheStatus?: CompletionCacheStatus;
-  pendingPreviewSql?: string;
-  pendingPreviewRequestId?: string;
-}
 
 interface TabState {
   tabs: TabData[];
