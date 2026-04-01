@@ -16,13 +16,15 @@ export class QueryExecutor {
    */
   public static injectLimit(sql: string): string {
     const trimmed = sql.trim();
+    const normalized = trimmed.replace(/;+\s*$/, '').trim();
+    const hasMultipleStatements = normalized.includes(';');
     // 简单的防御：如果是 SELECT 开头，且没有包含 LIMIT
     // 仅适用于最外层没有 LIMIT 的情况
     const isSelect = /^select\s/i.test(trimmed);
     const hasLimit = /\blimit\s+\d+/i.test(trimmed);
     const hasTop = /^select\s+top\s+\d+/i.test(trimmed);
 
-    if (isSelect && !hasLimit && !hasTop) {
+    if (!hasMultipleStatements && isSelect && !hasLimit && !hasTop) {
       // 避免语句末尾带有分号时插入 LIMIT 导致语法错误
       if (trimmed.endsWith(';')) {
         return `${trimmed.slice(0, -1)} LIMIT 1000;`;
