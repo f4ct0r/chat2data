@@ -6,7 +6,6 @@ import { Button, Tabs, Modal, Typography } from 'antd';
 import { CaretRightOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { QueryResult, TableEditMetadata } from '../../../shared/types';
 import { useTabStore } from '../../store/tabStore';
-import { SqlClassifier, SqlRiskLevel } from '../../../core/security/sql-classifier';
 import { emitGlobalError } from '../../utils/errorBus';
 import { resolveExecutableSql, SqlExecutionTarget } from '../SqlEditor/sql-execution';
 import { useI18n } from '../../i18n/i18n-context';
@@ -39,6 +38,7 @@ import {
   getEditablePreviewApplyBuffer,
   getEditablePreviewApplyError,
 } from './sql-workspace-utils';
+import { summarizeDangerousSql } from './sql-dangerous-summary';
 
 interface SqlWorkspaceProps {
   tabId: string;
@@ -367,13 +367,31 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     setApplyError(null);
     setPostApplyNotice(null);
 
-    const classification = SqlClassifier.classify(executableSql);
+    const dangerousSummary = summarizeDangerousSql(executableSql);
 
-    if (classification.level === SqlRiskLevel.DANGEROUS) {
+    if (dangerousSummary) {
       Modal.confirm({
         title: t('sql.dangerousTitle'),
         icon: <ExclamationCircleOutlined className="text-red-500" />,
-        content: t('sql.dangerousContent', { operation: classification.operation }),
+        content: (
+          <div className="font-mono text-xs text-[#737373]">
+            <div>
+              {t('sql.dangerousBatchContent', {
+                count: dangerousSummary.totalDangerousStatementCount,
+              })}
+            </div>
+            <div className="mt-2 space-y-1">
+              {dangerousSummary.operations.map(({ operation, count }) => (
+                <div key={operation}>
+                  {t('sql.dangerousBatchItem', {
+                    count,
+                    operation,
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        ),
         okText: t('sql.confirmExecute'),
         okType: 'danger',
         cancelText: t('common.cancel'),

@@ -15,6 +15,10 @@ const dataGridPropsState = vi.hoisted(() => ({
   editablePreviewPresent: false,
 }));
 
+const buttonPropsState = vi.hoisted(() => ({
+  executeOnClick: null as null | (() => void | Promise<void>),
+}));
+
 const queryHistoryPropsState = vi.hoisted(() => ({
   onReplay: null as null | ((sql: string) => void),
 }));
@@ -46,6 +50,15 @@ const tabsState = vi.hoisted(() => ({
 }));
 
 const updateTabMock = vi.hoisted(() => vi.fn());
+const modalConfirmMock = vi.hoisted(() => vi.fn());
+const dangerousSummaryState = vi.hoisted(() => ({
+  current: null as null | {
+    totalDangerousStatementCount: number;
+    operations: Array<{ operation: string; count: number }>;
+  },
+}));
+const executeQueryMock = vi.hoisted(() => vi.fn());
+
 vi.mock('../SqlEditor', () => ({
   __esModule: true,
   default: ({ value }: { value: string }) => <div data-sql-editor-value={value}>sql-editor</div>,
@@ -82,8 +95,20 @@ vi.mock('@ant-design/icons', () => ({
 }));
 
 vi.mock('antd', () => ({
-  Button: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
-  Modal: { confirm: vi.fn() },
+  Button: ({
+    children,
+    onClick,
+  }: {
+    children: React.ReactNode;
+    onClick?: () => void | Promise<void>;
+  }) => {
+    if (typeof children === 'string' && children.includes('执行')) {
+      buttonPropsState.executeOnClick = onClick ?? null;
+    }
+
+    return <button>{children}</button>;
+  },
+  Modal: { confirm: modalConfirmMock },
   Tabs: ({
     className,
     items,
@@ -135,6 +160,10 @@ vi.mock('../SqlEditor/sql-execution', () => ({
   resolveExecutableSql: () => 'select 1;',
 }));
 
+vi.mock('./sql-dangerous-summary', () => ({
+  summarizeDangerousSql: () => dangerousSummaryState.current,
+}));
+
 vi.mock('./sql-workspace-state', () => ({
   getExecutionDisplayState: () => ({
     kind: 'data',
@@ -170,22 +199,27 @@ describe('SqlWorkspace layout', () => {
       },
     ];
     dataGridPropsState.editablePreviewPresent = false;
+    buttonPropsState.executeOnClick = null;
     queryHistoryPropsState.onReplay = null;
+    dangerousSummaryState.current = null;
     updateTabMock.mockReset();
+    modalConfirmMock.mockReset();
+    executeQueryMock.mockReset();
     updateTabMock.mockImplementation((tabId: string, patch: Partial<TabData>) => {
       tabsState.current = tabsState.current.map((tab) =>
         tab.id === tabId ? { ...tab, ...patch } : tab
       );
     });
+    executeQueryMock.mockResolvedValue({
+      columns: ['id'],
+      rows: [{ id: 1 }],
+      rowCount: 1,
+      durationMs: 5,
+    });
     vi.stubGlobal('window', {
       api: {
         db: {
-          executeQuery: vi.fn().mockResolvedValue({
-            columns: ['id'],
-            rows: [{ id: 1 }],
-            rowCount: 1,
-            durationMs: 5,
-          }),
+          executeQuery: executeQueryMock,
           getTableEditMetadata: vi.fn(),
         },
       },
@@ -288,6 +322,61 @@ describe('SqlWorkspace layout', () => {
         kind: 'query-history-replay',
       },
     });
+  });
+
+  it('shows one grouped confirmation for dangerous statement batches', async () => {
+    dangerousSummaryState.current = {
+      totalDangerousStatementCount: 3,
+      operations: [
+        { operation: 'DELETE', count: 2 },
+        { operation: 'UPDATE', count: 1 },
+      ],
+    };
+
+    renderToStaticMarkup(<SqlWorkspace tabId="tab-1" />);
+
+    expect(buttonPropsState.executeOnClick).not.toBeNull();
+    await buttonPropsState.executeOnClick?.();
+
+    expect(modalConfirmMock).toHaveBeenCalledTimes(1);
+    const [{ title, okType, content }] = modalConfirmMock.mock.calls[0];
+    const contentMarkup = renderToStaticMarkup(content);
+
+    expect(title).toBe('检测到危险操作');
+    expect(okType).toBe('danger');
+    expect(contentMarkup).toContain('当前执行包含 3 条危险语句');
+    expect(contentMarkup).toContain('2 条 DELETE 语句');
+    expect(contentMarkup).toContain('1 条 UPDATE 语句');
+  });
+
+  it('executes the current SQL after the dangerous batch is confirmed', async () => {
+    dangerousSummaryState.current = {
+      totalDangerousStatementCount: 1,
+      operations: [{ operation: 'DELETE', count: 1 }],
+    };
+
+    renderToStaticMarkup(<SqlWorkspace tabId="tab-1" />);
+
+    expect(buttonPropsState.executeOnClick).not.toBeNull();
+    await buttonPropsState.executeOnClick?.();
+
+    expect(modalConfirmMock).toHaveBeenCalledTimes(1);
+    const [{ onOk }] = modalConfirmMock.mock.calls[0];
+
+    await onOk();
+
+    expect(executeQueryMock).toHaveBeenCalledWith('conn-1', 'select 1;');
+  });
+
+  it('executes safe batches without opening the danger confirmation modal', async () => {
+    dangerousSummaryState.current = null;
+
+    renderToStaticMarkup(<SqlWorkspace tabId="tab-1" />);
+
+    expect(buttonPropsState.executeOnClick).not.toBeNull();
+    await buttonPropsState.executeOnClick?.();
+
+    expect(modalConfirmMock).not.toHaveBeenCalled();
   });
 });
 

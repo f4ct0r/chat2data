@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveExecutableSql } from './sql-execution';
+import { resolveExecutableSql, splitSqlStatements } from './sql-execution';
 
 describe('resolveExecutableSql', () => {
   const sql = `
@@ -66,5 +66,51 @@ WHERE created_at < NOW() - INTERVAL '7 days';
         'full-content'
       )
     ).toBe(sql);
+  });
+
+  it('does not split statements on semicolons inside string literals', () => {
+    expect(
+      splitSqlStatements(`
+UPDATE users
+SET note = 'queued; needs review'
+WHERE id = 1;
+
+DELETE FROM audit_logs
+WHERE id = 9;
+`.trim())
+    ).toEqual([
+      {
+        sql: "UPDATE users\nSET note = 'queued; needs review'\nWHERE id = 1;",
+        startLineNumber: 1,
+        endLineNumber: 3,
+      },
+      {
+        sql: 'DELETE FROM audit_logs\nWHERE id = 9;',
+        startLineNumber: 5,
+        endLineNumber: 6,
+      },
+    ]);
+  });
+
+  it('does not split statements on semicolons inside comments', () => {
+    expect(
+      splitSqlStatements(`
+-- keep the next statement; do not split here
+UPDATE users SET status = 'pending' WHERE id = 1;
+/* archive; later */
+DELETE FROM jobs WHERE id = 2;
+`.trim())
+    ).toEqual([
+      {
+        sql: "-- keep the next statement; do not split here\nUPDATE users SET status = 'pending' WHERE id = 1;",
+        startLineNumber: 1,
+        endLineNumber: 2,
+      },
+      {
+        sql: '/* archive; later */\nDELETE FROM jobs WHERE id = 2;',
+        startLineNumber: 3,
+        endLineNumber: 4,
+      },
+    ]);
   });
 });
