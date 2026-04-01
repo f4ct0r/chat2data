@@ -135,4 +135,25 @@ describe('QueryHistory layout', () => {
     expect(markup).toContain('select * from missing_table');
     expect(markup).toContain('Table not found');
   });
+
+  it('keeps long SQL statements horizontally scrollable instead of truncating them', () => {
+    const markup = renderToStaticMarkup(
+      <QueryHistory
+        history={[
+          {
+            id: '1',
+            sql: 'select * from transactions where customer_id = 1234567890 and status = "pending" order by created_at desc limit 100',
+            durationMs: 21,
+            timestamp: 1,
+            status: 'success',
+          },
+        ]}
+        onReplay={() => undefined}
+      />
+    );
+
+    expect(markup).toContain('overflow-x-auto');
+    expect(markup).toContain('whitespace-nowrap');
+    expect(markup).not.toContain('truncate');
+  });
 });

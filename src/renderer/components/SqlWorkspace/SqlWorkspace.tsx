@@ -398,8 +398,12 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
       return;
     }
 
-    updateTab(tabRecordId, { content: sql });
-    // setTimeout to allow state update before execute, or just rely on the user to click execute
+    updateTab(tabRecordId, {
+      content: sql,
+      pendingAutoExecute: {
+        kind: 'query-history-replay',
+      },
+    });
   };
 
   const handleSelectionChange = (nextSelection: GridSelectionState) => {

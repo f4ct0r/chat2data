@@ -15,6 +15,10 @@ const dataGridPropsState = vi.hoisted(() => ({
   editablePreviewPresent: false,
 }));
 
+const queryHistoryPropsState = vi.hoisted(() => ({
+  onReplay: null as null | ((sql: string) => void),
+}));
+
 const editablePreviewViewState = vi.hoisted(() => ({
   current: {
     mode: 'hidden' as 'hidden' | 'editable' | 'read-only',
@@ -44,7 +48,7 @@ const tabsState = vi.hoisted(() => ({
 const updateTabMock = vi.hoisted(() => vi.fn());
 vi.mock('../SqlEditor', () => ({
   __esModule: true,
-  default: () => <div>sql-editor</div>,
+  default: ({ value }: { value: string }) => <div data-sql-editor-value={value}>sql-editor</div>,
 }));
 
 vi.mock('../DataGrid/DataGrid', () => ({
@@ -61,7 +65,15 @@ vi.mock('../DataGrid/DataGrid', () => ({
 
 vi.mock('../QueryHistory/QueryHistory', () => ({
   __esModule: true,
-  default: () => <div>query-history</div>,
+  default: ({
+    onReplay,
+  }: {
+    history: Array<{ id: string; sql: string }>;
+    onReplay: (sql: string) => void;
+  }) => {
+    queryHistoryPropsState.onReplay = onReplay;
+    return <div>query-history</div>;
+  },
 }));
 
 vi.mock('@ant-design/icons', () => ({
@@ -158,10 +170,22 @@ describe('SqlWorkspace layout', () => {
       },
     ];
     dataGridPropsState.editablePreviewPresent = false;
+    queryHistoryPropsState.onReplay = null;
     updateTabMock.mockReset();
+    updateTabMock.mockImplementation((tabId: string, patch: Partial<TabData>) => {
+      tabsState.current = tabsState.current.map((tab) =>
+        tab.id === tabId ? { ...tab, ...patch } : tab
+      );
+    });
     vi.stubGlobal('window', {
       api: {
         db: {
+          executeQuery: vi.fn().mockResolvedValue({
+            columns: ['id'],
+            rows: [{ id: 1 }],
+            rowCount: 1,
+            durationMs: 5,
+          }),
           getTableEditMetadata: vi.fn(),
         },
       },
@@ -244,6 +268,26 @@ describe('SqlWorkspace layout', () => {
     expect(markup).toContain('editable-preview-shell');
     expect(markup).toContain('editable-preview-readonly-reason');
     expect(markup).toContain('No primary key.');
+  });
+
+  it('replays a history entry by updating the editor content and scheduling execution', () => {
+    renderToStaticMarkup(<SqlWorkspace tabId="tab-1" />);
+
+    expect(queryHistoryPropsState.onReplay).not.toBeNull();
+    queryHistoryPropsState.onReplay?.('select 1;');
+
+    expect(updateTabMock).toHaveBeenCalledWith('tab-1', {
+      content: 'select 1;',
+      pendingAutoExecute: {
+        kind: 'query-history-replay',
+      },
+    });
+    expect(tabsState.current[0]).toMatchObject({
+      content: 'select 1;',
+      pendingAutoExecute: {
+        kind: 'query-history-replay',
+      },
+    });
   });
 });
 
