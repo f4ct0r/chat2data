@@ -65,7 +65,7 @@ export const QueryHistory: React.FC<QueryHistoryProps> = ({ history, onReplay })
               }
               description={
                 <div className="flex flex-col gap-1">
-                  <div className="font-mono text-sm text-[#00ff00] bg-[#000000] border border-[#333333] p-2 rounded-sm truncate max-w-2xl">
+                  <div className="font-mono text-sm text-[#00ff00] bg-[#000000] border border-[#333333] p-2 rounded-sm max-w-2xl overflow-x-auto whitespace-nowrap">
                     {item.sql}
                   </div>
                   {item.error && (
