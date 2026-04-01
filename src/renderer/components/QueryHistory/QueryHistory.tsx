@@ -35,7 +35,7 @@ export const QueryHistory: React.FC<QueryHistoryProps> = ({ history, onReplay })
                   type="text"
                   icon={<PlayCircleOutlined className="text-[#a3a3a3] hover:text-[#FF5722]" />}
                   onClick={() => onReplay(item.sql)}
-                  title={t('queryHistory.loadIntoEditor')}
+                  title={t('queryHistory.replay')}
                   className="query-history-replay-button font-mono text-[#a3a3a3] hover:!text-[#FF5722]"
                 >
                   {t('queryHistory.replay')}

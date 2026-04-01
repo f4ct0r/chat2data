@@ -22,4 +22,12 @@ describe('electron-builder database exclusions', () => {
     expect(packageJson.scripts['build:mac']).toContain('npm run prepack:guard');
     expect(packageJson.scripts['build:win']).toContain('npm run prepack:guard');
   });
+
+  it('rebuilds native Electron dependencies before dev startup', () => {
+    expect(packageJson.scripts.predev).toContain('electron-builder install-app-deps');
+  });
+
+  it('rebuilds better-sqlite3 for the current Node runtime before tests', () => {
+    expect(packageJson.scripts.pretest).toContain('npm rebuild better-sqlite3');
+  });
 });

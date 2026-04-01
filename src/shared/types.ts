@@ -53,7 +53,7 @@ export type CompletionCacheStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type TabType = 'sql' | 'chat' | 'script';
 
 export interface PendingAutoExecuteRequest {
-  kind: 'script-execute-now';
+  kind: 'script-execute-now' | 'query-history-replay';
 }
 
 export interface PreviewTableRef {

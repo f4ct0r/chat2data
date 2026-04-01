@@ -398,8 +398,12 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
       return;
     }
 
-    updateTab(tabRecordId, { content: sql });
-    // setTimeout to allow state update before execute, or just rely on the user to click execute
+    updateTab(tabRecordId, {
+      content: sql,
+      pendingAutoExecute: {
+        kind: 'query-history-replay',
+      },
+    });
   };
 
   const handleSelectionChange = (nextSelection: GridSelectionState) => {
@@ -614,13 +618,13 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
         }
       },
       content: (
-        <div className="font-mono text-xs text-[#d4d4d4]">
+        <div className="font-mono text-xs text-[#737373]">
           <div>{t('editablePreview.confirmUpdates', { count: updateCount })}</div>
           <div>{t('editablePreview.confirmDeletes', { count: deleteCount })}</div>
-          <div className="mt-3 text-[#737373]">
+          <div className="mt-3 text-[#a3a3a3]">
             {t('editablePreview.confirmSqlPreview')}
           </div>
-          <pre className="mt-2 max-h-48 overflow-auto rounded border border-[#333333] bg-[#050505] p-3 whitespace-pre-wrap text-[#d4d4d4]">
+          <pre className="mt-2 max-h-48 overflow-auto rounded border border-[#333333] bg-[#050505] p-3 whitespace-pre-wrap text-[#737373]">
             {generatedSql.previewSql}
           </pre>
         </div>
