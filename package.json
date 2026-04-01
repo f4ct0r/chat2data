@@ -5,7 +5,9 @@
   "author": "Chat2Data Contributors",
   "main": "dist/main/main.js",
   "scripts": {
+    "predev": "electron-builder install-app-deps",
     "dev": "vite",
+    "pretest": "npm rebuild better-sqlite3",
     "prepack:guard": "node scripts/assert-no-bundled-databases.mjs",
     "build": "npm run prepack:guard && tsc && vite build && electron-builder --config electron-builder.config.cjs",
     "build:mac": "npm run prepack:guard && tsc && vite build && electron-builder --config electron-builder.config.cjs --mac",

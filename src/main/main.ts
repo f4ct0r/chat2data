@@ -50,13 +50,8 @@ function createWindow() {
 app.commandLine.appendSwitch('disable-features', 'AutofillServerCommunication');
 
 app.whenReady().then(() => {
-  // Initialize SQLite Database
-  try {
-    sqliteService.init();
-    console.log('SQLite database initialized successfully');
-  } catch (err) {
-    console.error('Failed to initialize SQLite database:', err);
-  }
+  sqliteService.init();
+  console.log('SQLite database initialized successfully');
 
   ipcMain.handle(IpcChannels.SYSTEM_PING, () => {
     console.log('Main process received system.ping');
@@ -306,6 +301,9 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+}).catch((err) => {
+  console.error('Failed to initialize SQLite database:', err);
+  app.quit();
 });
 
 app.on('window-all-closed', () => {
