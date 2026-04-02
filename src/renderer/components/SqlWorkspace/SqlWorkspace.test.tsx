@@ -5,6 +5,7 @@ import type { TabData } from '../../../shared/types';
 import { createTableEditBuffer } from '../../features/table-edit-buffer';
 import { generateTableEditSql } from '../../features/table-edit-sql';
 import SqlWorkspace from './SqlWorkspace';
+import { shouldConsumePendingAutoExecute } from './SqlWorkspace';
 import {
   coerceEditablePreviewCellValue,
   getEditablePreviewApplyBuffer,
@@ -377,6 +378,22 @@ describe('SqlWorkspace layout', () => {
     await buttonPropsState.executeOnClick?.();
 
     expect(modalConfirmMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('shouldConsumePendingAutoExecute', () => {
+  it('consumes the same pending auto-execute request only once', () => {
+    const request = { kind: 'script-execute-now' } as const;
+
+    expect(shouldConsumePendingAutoExecute(null, request)).toBe(true);
+    expect(shouldConsumePendingAutoExecute(request, request)).toBe(false);
+  });
+
+  it('allows a later auto-execute request with the same shape to run again', () => {
+    const previousRequest = { kind: 'query-history-replay' } as const;
+    const nextRequest = { kind: 'query-history-replay' } as const;
+
+    expect(shouldConsumePendingAutoExecute(previousRequest, nextRequest)).toBe(true);
   });
 });
 

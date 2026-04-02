@@ -24,6 +24,7 @@ import {
   GridEscapeAction,
   GridSelectionState,
 } from '../DataGrid/data-grid-editing-state';
+import type { PendingAutoExecuteRequest } from '../../../shared/types';
 import {
   EditablePreviewNotice,
   getEditablePreviewViewState,
@@ -75,6 +76,17 @@ const getPendingChangeCount = (buffer: TableEditBuffer | null) => {
   return buffer.rows.filter((row) => row.deleted || row.changedColumns.length > 0).length;
 };
 
+export const shouldConsumePendingAutoExecute = (
+  lastHandledRequest: PendingAutoExecuteRequest | null,
+  nextRequest: PendingAutoExecuteRequest | null
+) => {
+  if (!nextRequest) {
+    return false;
+  }
+
+  return lastHandledRequest !== nextRequest;
+};
+
 const { Text } = Typography;
 
 const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
@@ -100,6 +112,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
   const [refreshLockReason, setRefreshLockReason] = useState<string | null>(null);
   const [lastExecutionKind, setLastExecutionKind] = useState<'preview' | 'custom' | null>(null);
   const handledPreviewRequestRef = useRef<string | null>(null);
+  const handledAutoExecuteRequestRef = useRef<PendingAutoExecuteRequest | null>(null);
   const tabType = tab?.type ?? null;
   const tabConnectionId = tab?.connectionId ?? null;
   const tabDatabase = tab?.database;
@@ -403,6 +416,17 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
   }, [executableSql, performExecution, t]);
 
   useEffect(() => {
+    if (!pendingAutoExecute) {
+      handledAutoExecuteRequestRef.current = null;
+      return;
+    }
+
+    if (!shouldConsumePendingAutoExecute(handledAutoExecuteRequestRef.current, pendingAutoExecute)) {
+      return;
+    }
+
+    handledAutoExecuteRequestRef.current = pendingAutoExecute;
+
     if (!tabRecordId || tabType !== 'sql' || !pendingAutoExecute) {
       return;
     }

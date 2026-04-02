@@ -98,6 +98,48 @@ export const formatSqlScriptValidationError = (
 
 const getReplayTitle = (scriptName: string) => scriptName.trim() || 'SQL Script';
 
+const toSaveErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : 'Failed to save SQL script';
+
+interface SaveSqlScriptDraftParams {
+  saveSqlScript: (input: SqlScriptInput) => Promise<SqlScript>;
+  saveInput: SqlScriptInput;
+  tabId: string;
+  updateTab: (tabId: string, updates: Record<string, unknown>) => void;
+}
+
+interface SaveSqlScriptDraftResult {
+  savedScript: SqlScript | null;
+  error: string | null;
+}
+
+export const saveSqlScriptDraft = async ({
+  saveSqlScript,
+  saveInput,
+  tabId,
+  updateTab,
+}: SaveSqlScriptDraftParams): Promise<SaveSqlScriptDraftResult> => {
+  try {
+    const savedScript = await saveSqlScript(saveInput);
+    updateTab(tabId, {
+      title: savedScript.name,
+      scriptId: savedScript.id,
+      scriptDatabaseName: savedScript.databaseName,
+      database: savedScript.databaseName,
+    });
+
+    return {
+      savedScript,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      savedScript: null,
+      error: toSaveErrorMessage(error),
+    };
+  }
+};
+
 const SqlScriptWorkspace: React.FC<SqlScriptWorkspaceProps> = ({ tabId }) => {
   const { t } = useI18n();
   const { tabs, updateTab, addTab } = useTabStore();
@@ -172,14 +214,21 @@ const SqlScriptWorkspace: React.FC<SqlScriptWorkspaceProps> = ({ tabId }) => {
     }
 
     setError(null);
-    const saved = await window.api.storage.saveSqlScript(saveInput);
-    setDraft(toScriptDraft(saved));
-    updateTab(tabId, {
-      title: saved.name,
-      scriptId: saved.id,
-      scriptDatabaseName: saved.databaseName,
-      database: saved.databaseName,
+    const result = await saveSqlScriptDraft({
+      saveSqlScript: window.api.storage.saveSqlScript,
+      saveInput,
+      tabId,
+      updateTab,
     });
+
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
+    if (result.savedScript) {
+      setDraft(toScriptDraft(result.savedScript));
+    }
   };
 
   const replayRenderedSql = (mode: Exclude<ReplayMode, null>, values: SqlScriptExecutionValues = {}) => {

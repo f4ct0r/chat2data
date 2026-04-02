@@ -5,6 +5,7 @@ import SqlScriptWorkspace, {
   buildSqlScriptSaveInput,
   createEmptyScriptDraft,
   formatSqlScriptValidationError,
+  saveSqlScriptDraft,
   toScriptDraft,
 } from './SqlScriptWorkspace';
 
@@ -154,5 +155,27 @@ describe('SqlScriptWorkspace helpers', () => {
         extraParameters: ['unused'],
       })
     ).toBe('Missing parameter definitions: userId | Unused parameters: unused');
+  });
+
+  it('returns a visible error instead of throwing when script save fails', async () => {
+    const updateTab = vi.fn();
+    const saved = await saveSqlScriptDraft({
+      saveSqlScript: vi.fn().mockRejectedValue(new Error('name is required')),
+      saveInput: buildSqlScriptSaveInput('conn-1', 'analytics', undefined, {
+        name: '',
+        description: '',
+        tagsText: '',
+        sql: 'select 1',
+        parameters: [],
+      }),
+      tabId: 'script-tab-1',
+      updateTab,
+    });
+
+    expect(saved).toEqual({
+      error: 'name is required',
+      savedScript: null,
+    });
+    expect(updateTab).not.toHaveBeenCalled();
   });
 });
