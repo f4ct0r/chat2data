@@ -3,6 +3,7 @@ import { Typography, Button, Card, Space } from 'antd';
 import { ConnectionConfig, StorageVerificationResult } from '../shared/types';
 import Layout from './components/Layout';
 import ConnectionListPanel from './components/ConnectionList/ConnectionListPanel';
+import ConnectionWorkspaceSidebar from './components/ConnectionList/ConnectionWorkspaceSidebar';
 import { PlusOutlined, SafetyCertificateOutlined, ApiOutlined, CodeOutlined, MessageOutlined } from '@ant-design/icons';
 import ObjectBrowser from './components/ObjectBrowser/ObjectBrowser';
 import SettingsModal from './components/Settings/SettingsModal';
@@ -22,6 +23,7 @@ import {
   buildScriptTabDraft,
   findOpenScriptTab,
 } from './features/sql-scripts/script-tab-routing';
+import { resolveConnectionListCollapsedState } from './features/connection-list-collapse';
 
 const { Title, Text } = Typography;
 
@@ -39,6 +41,7 @@ const App: React.FC = () => {
   const [verifyResult, setVerifyResult] = useState<StorageVerificationResult[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [selectedConnection, setSelectedConnection] = useState<ConnectionConfig | null>(null);
+  const [isConnectionListCollapsed, setIsConnectionListCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeView, setActiveView] = useState<SidebarView>('connections');
   
@@ -50,6 +53,13 @@ const App: React.FC = () => {
         await window.api.db.connect(conn.id);
         setSelectedConnectionId(conn.id);
         setSelectedConnection(conn);
+        setIsConnectionListCollapsed((currentCollapsed) =>
+          resolveConnectionListCollapsedState({
+            currentCollapsed,
+            activeView,
+            selectedConnectionId: conn.id,
+          })
+        );
       } catch (error) {
         console.error('Failed to connect:', error);
         emitGlobalError({
@@ -68,6 +78,7 @@ const App: React.FC = () => {
       }
       setSelectedConnectionId(null);
       setSelectedConnection(null);
+      setIsConnectionListCollapsed(false);
     }
   };
 
@@ -312,24 +323,33 @@ const App: React.FC = () => {
         onOpenSettings={() => setIsSettingsOpen(true)}
         sidebarPanel={
           activeView === 'connections' ? (
-            <div className="flex h-full min-h-0 border-r border-[#333333]">
-              <ConnectionListPanel 
-                selectedConnectionId={selectedConnectionId}
-                onSelect={handleSelectConnection} 
-              />
-              {selectedConnectionId && (
-                <div className="h-full w-64 border-l border-[#333333] bg-[#121212]">
-                  <ObjectBrowser 
-                    connectionId={selectedConnectionId} 
-                    connectionType={selectedConnection?.dbType} 
+            <ConnectionWorkspaceSidebar
+              selectedConnectionId={selectedConnectionId}
+              isConnectionListCollapsed={isConnectionListCollapsed}
+              onToggleConnectionList={() =>
+                setIsConnectionListCollapsed((collapsed) => !collapsed)
+              }
+              collapseButtonLabel={t('connectionList.collapse')}
+              expandButtonLabel={t('connectionList.expand')}
+              connectionList={
+                <ConnectionListPanel
+                  selectedConnectionId={selectedConnectionId}
+                  onSelect={handleSelectConnection}
+                />
+              }
+              objectBrowser={
+                selectedConnectionId ? (
+                  <ObjectBrowser
+                    connectionId={selectedConnectionId}
+                    connectionType={selectedConnection?.dbType}
                     connectionDatabase={selectedConnection?.database}
                     onPreviewTable={handlePreviewTable}
                     onOpenScript={handleOpenScriptTab}
                     onCreateScript={handleCreateScriptTab}
                   />
-                </div>
-              )}
-            </div>
+                ) : null
+              }
+            />
           ) : null
         }
       >

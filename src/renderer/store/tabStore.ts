@@ -18,6 +18,8 @@ export const getDefaultSchemaForDbType = (
     case 'mysql':
     case 'clickhouse':
       return database;
+    case 'sqlite':
+      return undefined;
     default:
       return undefined;
   }

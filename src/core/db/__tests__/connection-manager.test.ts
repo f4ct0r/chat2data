@@ -34,6 +34,19 @@ vi.mock('../adapters/postgresql', () => ({
   }
 }));
 
+vi.mock('../adapters/sqlite', () => ({
+  SqliteAdapter: class {
+    connect = vi.fn().mockResolvedValue(undefined);
+    disconnect = vi.fn().mockResolvedValue(undefined);
+    testConnection = vi.fn().mockResolvedValue(true);
+    executeQuery = vi.fn().mockResolvedValue({ rows: [], rowCount: 0, columns: [] });
+    getDatabases = vi.fn().mockResolvedValue(['/tmp/app.sqlite']);
+    getSchemas = vi.fn().mockResolvedValue([]);
+    getTables = vi.fn().mockResolvedValue(['users']);
+    getColumns = vi.fn().mockResolvedValue([{ name: 'id', type: 'INTEGER' }]);
+  }
+}));
+
 vi.mock('../../storage/sqlite-service', () => ({
   sqliteService: {
     getDb: vi.fn()
@@ -226,5 +239,30 @@ describe('ConnectionManager', () => {
     await expect(
       connectionManager.executeBatch('conn-id-7', ['UPDATE users SET name = "A"'])
     ).rejects.toThrow('does not support batch execution');
+  });
+
+  it('should route sqlite connections to the sqlite adapter', async () => {
+    const mockRow = {
+      id: 'conn-id-8',
+      name: 'Local SQLite',
+      db_type: 'sqlite',
+      host: '',
+      port: 0,
+      username: '',
+      database: '/tmp/local.sqlite',
+      encrypted_password: null
+    };
+
+    mockDb.prepare.mockReturnValue({
+      get: vi.fn().mockReturnValue(mockRow)
+    });
+
+    await connectionManager.connect('conn-id-8');
+
+    const driver = connectionManager.getConnection('conn-id-8');
+    expect(driver.connect).toHaveBeenCalledWith(expect.objectContaining({
+      dbType: 'sqlite',
+      database: '/tmp/local.sqlite'
+    }));
   });
 });

@@ -148,6 +148,38 @@ describe('table edit sql generation', () => {
     ]);
   });
 
+  it('does not qualify sqlite edit statements with the backing file path', () => {
+    const sqliteTable = {
+      dbType: 'sqlite' as const,
+      database: '/tmp/analytics.sqlite',
+      table: 'users',
+      previewSql: 'SELECT * FROM "users" LIMIT 100',
+    };
+
+    const buffer = createTableEditBuffer(
+      [
+        {
+          id: 1,
+          active: false,
+        },
+      ],
+      ['id']
+    );
+
+    const rowId = buffer.rows[0].rowId;
+    const editedBuffer = updateTableEditCell(buffer, rowId, 'active', true);
+    const result = generateTableEditSql(editedBuffer, sqliteTable);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+
+    expect(result.batchStatements).toEqual([
+      'UPDATE "users" SET "active" = TRUE WHERE "id" = 1',
+    ]);
+  });
+
   it.each([
     ['object', { nested: true }, 'object'],
     ['array', [1, 2, 3], 'array'],

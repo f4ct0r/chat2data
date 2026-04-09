@@ -71,11 +71,15 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
           const schemas = await window.api.db.getSchemas(connectionId, database);
 
           const objectChildren =
-            schemas.length === 1 && schemas[0] === database
-              ? (await window.api.db.getTables(connectionId, database, database)).map((table) =>
-                  buildTableNode(database, database, table)
+            schemas.length === 0
+              ? (await window.api.db.getTables(connectionId, database)).map((table) =>
+                  buildTableNode(database, '', table)
                 )
-              : schemas.map((schema) => buildSchemaNode(database, schema));
+              : schemas.length === 1 && schemas[0] === database
+                ? (await window.api.db.getTables(connectionId, database, database)).map((table) =>
+                    buildTableNode(database, database, table)
+                  )
+                : schemas.map((schema) => buildSchemaNode(database, schema));
 
           return {
             ...rootNode,

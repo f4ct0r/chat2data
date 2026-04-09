@@ -210,6 +210,30 @@ export class SchemaIndexer {
             });
           }
         }
+      } else if (dbType === 'sqlite') {
+        const tableNames = await driver.getTables(targetDb);
+
+        for (const tableName of tableNames) {
+          tables.set(tableName, {
+            name: tableName,
+            columns: []
+          });
+        }
+
+        for (const tableName of tableNames) {
+          const columnRows = await driver.getColumns(targetDb, undefined, tableName);
+          const table = tables.get(tableName);
+          if (!table) {
+            continue;
+          }
+
+          for (const column of columnRows) {
+            table.columns.push({
+              name: getString(column.name),
+              type: getString(column.type),
+            });
+          }
+        }
       }
 
       // Build DDL for each table

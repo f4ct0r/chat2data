@@ -186,4 +186,50 @@ describe('completionSchemaService', () => {
       expect.arrayContaining([expect.objectContaining({ name: 'line_items' })])
     );
   });
+
+  it('keeps sqlite completion context schema-less while using the configured file path as database key', async () => {
+    vi.mocked(connectionManager.getConfigFromStorage).mockReturnValue({
+      id: 'conn-5',
+      name: 'Local SQLite',
+      dbType: 'sqlite',
+      host: '',
+      port: 0,
+      username: '',
+      database: '/tmp/local.sqlite',
+    });
+
+    const indexedSchema: SchemaIndex = {
+      database: '/tmp/local.sqlite',
+      schema: undefined,
+      lastUpdated: 1001,
+      tables: new Map([
+        [
+          'users',
+          {
+            name: 'users',
+            columns: [{ name: 'id', type: 'INTEGER' }],
+          },
+        ],
+      ]),
+    };
+
+    vi.mocked(schemaIndexer.getIndex).mockReturnValue(indexedSchema);
+
+    const { completionSchemaService } = await import('../completion-schema-service');
+
+    const result = await completionSchemaService.refreshSchemaIndex('conn-5');
+
+    expect(schemaIndexer.buildIndex).toHaveBeenCalledWith('conn-5', '/tmp/local.sqlite', undefined);
+    expect(result).toEqual({
+      database: '/tmp/local.sqlite',
+      schema: undefined,
+      lastUpdated: 1001,
+      tables: [
+        {
+          name: 'users',
+          columns: [{ name: 'id', type: 'INTEGER' }],
+        },
+      ],
+    });
+  });
 });

@@ -6,7 +6,7 @@ import type {
 export interface ConnectionConfig {
   id: string;
   name: string;
-  dbType: 'mysql' | 'postgres' | 'mssql' | 'clickhouse';
+  dbType: 'mysql' | 'postgres' | 'mssql' | 'clickhouse' | 'sqlite';
   host: string;
   port: number;
   username: string;

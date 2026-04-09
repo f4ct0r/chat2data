@@ -84,6 +84,10 @@ const getQualifiedTableSegments = (
     (segment): segment is string => Boolean(segment)
   );
 
+  if (table.dbType === 'sqlite') {
+    return [table.table];
+  }
+
   if (
     (table.dbType === 'mysql' || table.dbType === 'clickhouse') &&
     table.database &&

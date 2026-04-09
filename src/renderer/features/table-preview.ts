@@ -80,6 +80,10 @@ const getPreviewPath = (request: TablePreviewRequest) => {
     (segment): segment is string => Boolean(segment)
   );
 
+  if (request.dbType === 'sqlite') {
+    return [request.table];
+  }
+
   if (
     (request.dbType === 'mysql' || request.dbType === 'clickhouse') &&
     request.database &&
@@ -103,6 +107,8 @@ const getDefaultSchemaForDbType = (
     case 'mysql':
     case 'clickhouse':
       return database;
+    case 'sqlite':
+      return undefined;
     default:
       return undefined;
   }

@@ -8,6 +8,7 @@ const DEFAULT_SCHEMA_BY_DB_TYPE: Record<ConnectionConfig['dbType'], string | und
   postgres: 'public',
   mssql: 'dbo',
   clickhouse: undefined,
+  sqlite: undefined,
 };
 
 class CompletionSchemaService {

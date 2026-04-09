@@ -13,6 +13,7 @@ interface ConnectionModalProps {
 const ConnectionModal: React.FC<ConnectionModalProps> = ({ open, onCancel, onSave, initialValues }) => {
   const { t } = useI18n();
   const [form] = Form.useForm();
+  const isSqlite = Form.useWatch('dbType', form) === 'sqlite';
 
   useEffect(() => {
     if (open) {
@@ -32,9 +33,18 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ open, onCancel, onSav
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
+      const normalizedValues = values.dbType === 'sqlite'
+        ? {
+            ...values,
+            host: '',
+            port: 0,
+            username: '',
+            password: undefined,
+          }
+        : values;
       await onSave({
         ...initialValues,
-        ...values,
+        ...normalizedValues,
       } as ConnectionConfig);
       form.resetFields();
     } catch (error) {
@@ -50,6 +60,16 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ open, onCancel, onSav
       mssql: 1433,
       clickhouse: 8123,
     };
+    if (value === 'sqlite') {
+      form.setFieldsValue({
+        host: '',
+        port: 0,
+        username: '',
+        password: undefined,
+      });
+      return;
+    }
+
     if (ports[value]) {
       form.setFieldValue('port', ports[value]);
     }
@@ -88,48 +108,56 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ open, onCancel, onSav
             <Select.Option value="postgres">PostgreSQL</Select.Option>
             <Select.Option value="mssql">SQL Server</Select.Option>
             <Select.Option value="clickhouse">ClickHouse</Select.Option>
+            <Select.Option value="sqlite">SQLite</Select.Option>
           </Select>
         </Form.Item>
 
-        <Form.Item style={{ marginBottom: 0 }}>
-          <Form.Item
-            name="host"
-            label={t('connectionModal.host')}
-            rules={[{ required: true, message: t('connectionModal.hostRequired') }]}
-            style={{ display: 'inline-block', width: 'calc(70% - 8px)' }}
-          >
-            <Input placeholder="localhost" />
-          </Form.Item>
-          <Form.Item
-            name="port"
-            label={t('connectionModal.port')}
-            rules={[{ required: true, message: t('connectionModal.portRequired') }]}
-            style={{ display: 'inline-block', width: 'calc(30%)', margin: '0 0 0 8px' }}
-          >
-            <InputNumber style={{ width: '100%' }} />
-          </Form.Item>
-        </Form.Item>
+        {!isSqlite ? (
+          <>
+            <Form.Item style={{ marginBottom: 0 }}>
+              <Form.Item
+                name="host"
+                label={t('connectionModal.host')}
+                rules={[{ required: true, message: t('connectionModal.hostRequired') }]}
+                style={{ display: 'inline-block', width: 'calc(70% - 8px)' }}
+              >
+                <Input placeholder="localhost" />
+              </Form.Item>
+              <Form.Item
+                name="port"
+                label={t('connectionModal.port')}
+                rules={[{ required: true, message: t('connectionModal.portRequired') }]}
+                style={{ display: 'inline-block', width: 'calc(30%)', margin: '0 0 0 8px' }}
+              >
+                <InputNumber style={{ width: '100%' }} />
+              </Form.Item>
+            </Form.Item>
 
-        <Form.Item
-          name="username"
-          label={t('connectionModal.username')}
-          rules={[{ required: true, message: t('connectionModal.usernameRequired') }]}
-        >
-          <Input placeholder="root" />
-        </Form.Item>
+            <Form.Item
+              name="username"
+              label={t('connectionModal.username')}
+              rules={[{ required: true, message: t('connectionModal.usernameRequired') }]}
+            >
+              <Input placeholder="root" />
+            </Form.Item>
 
-        <Form.Item
-          name="password"
-          label={t('connectionModal.password')}
-        >
-          <Input.Password placeholder={t('connectionModal.passwordPlaceholder')} />
-        </Form.Item>
+            <Form.Item
+              name="password"
+              label={t('connectionModal.password')}
+            >
+              <Input.Password placeholder={t('connectionModal.passwordPlaceholder')} />
+            </Form.Item>
+          </>
+        ) : null}
 
         <Form.Item
           name="database"
-          label={t('connectionModal.database')}
+          label={isSqlite ? t('connectionModal.databasePath') : t('connectionModal.database')}
+          rules={[
+            { required: isSqlite, message: t('connectionModal.databasePathRequired') },
+          ]}
         >
-          <Input placeholder={t('connectionModal.databasePlaceholder')} />
+          <Input placeholder={isSqlite ? t('connectionModal.databasePathPlaceholder') : t('connectionModal.databasePlaceholder')} />
         </Form.Item>
       </Form>
     </Modal>

@@ -44,5 +44,6 @@ describe('tabStore completion context', () => {
     expect(getDefaultSchemaForDbType('mssql', 'reporting')).toBe('dbo');
     expect(getDefaultSchemaForDbType('mysql', 'warehouse')).toBe('warehouse');
     expect(getDefaultSchemaForDbType('clickhouse', 'warehouse')).toBe('warehouse');
+    expect(getDefaultSchemaForDbType('sqlite', '/tmp/warehouse.sqlite')).toBeUndefined();
   });
 });

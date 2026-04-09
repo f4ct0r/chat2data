@@ -12,6 +12,7 @@ import { MysqlAdapter } from './adapters/mysql';
 import { PostgresAdapter } from './adapters/postgresql';
 import { MssqlAdapter } from './adapters/mssql';
 import { ClickhouseAdapter } from './adapters/clickhouse';
+import { SqliteAdapter } from './adapters/sqlite';
 
 export class ConnectionManager {
   private connections = new Map<string, DatabaseDriver>();
@@ -57,6 +58,8 @@ export class ConnectionManager {
         return new MssqlAdapter();
       case 'clickhouse':
         return new ClickhouseAdapter();
+      case 'sqlite':
+        return new SqliteAdapter();
       default:
         throw new Error(`Unsupported database type: ${dbType}`);
     }

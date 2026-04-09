@@ -52,6 +52,18 @@ describe('buildPreviewTableSql', () => {
       })
     ).toBe('SELECT * FROM "analytics"."public"."user""name" LIMIT 100');
   });
+
+  it('does not qualify sqlite preview queries with the backing file path', () => {
+    expect(
+      buildPreviewTableSql({
+        ...baseRequest,
+        dbType: 'sqlite',
+        database: '/tmp/analytics.sqlite',
+        schema: undefined,
+        table: 'users',
+      })
+    ).toBe('SELECT * FROM "users" LIMIT 100');
+  });
 });
 
 describe('resolvePreviewTarget', () => {
