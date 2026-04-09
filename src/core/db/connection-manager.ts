@@ -112,11 +112,16 @@ export class ConnectionManager {
       return; // 已经连接
     }
 
+    const adapter = await this.createDetachedDriver(id);
+    this.connections.set(id, adapter);
+  }
+
+  public async createDetachedDriver(id: string): Promise<DatabaseDriver> {
     const config = this.getConfigFromStorage(id);
     const adapter = this.createAdapter(config.dbType);
-    
+
     await adapter.connect(config);
-    this.connections.set(id, adapter);
+    return adapter;
   }
 
   /**

@@ -265,4 +265,29 @@ describe('ConnectionManager', () => {
       database: '/tmp/local.sqlite'
     }));
   });
+
+  it('should create a detached driver without storing it as an active connection', async () => {
+    const mockRow = {
+      id: 'conn-id-9',
+      name: 'Detached PostgreSQL',
+      db_type: 'postgres',
+      host: 'localhost',
+      port: 5432,
+      username: 'user',
+      database: 'analytics',
+      encrypted_password: null
+    };
+
+    mockDb.prepare.mockReturnValue({
+      get: vi.fn().mockReturnValue(mockRow)
+    });
+
+    const driver = await connectionManager.createDetachedDriver('conn-id-9');
+
+    expect(driver.connect).toHaveBeenCalledWith(expect.objectContaining({
+      dbType: 'postgres',
+      database: 'analytics'
+    }));
+    expect(() => connectionManager.getConnection('conn-id-9')).toThrow('Connection conn-id-9 is not active');
+  });
 });

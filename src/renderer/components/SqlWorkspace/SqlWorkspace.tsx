@@ -1,10 +1,16 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { useEffect, useRef, useState } from 'react';
 import SqlEditor from '../SqlEditor';
 import DataGrid from '../DataGrid/DataGrid';
 import QueryHistory from '../QueryHistory/QueryHistory';
-import { Button, Tabs, Modal, Typography } from 'antd';
+import { Button, Modal, Select, Tabs, Typography } from 'antd';
 import { CaretRightOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
-import { QueryResult, TableEditMetadata } from '../../../shared/types';
+import {
+  QueryExportFormat,
+  QueryExportJobSnapshot,
+  QueryResult,
+  TableEditMetadata,
+} from '../../../shared/types';
 import { useTabStore } from '../../store/tabStore';
 import { emitGlobalError } from '../../utils/errorBus';
 import { resolveExecutableSql, SqlExecutionTarget } from '../SqlEditor/sql-execution';
@@ -40,6 +46,7 @@ import {
   getEditablePreviewApplyError,
 } from './sql-workspace-utils';
 import { summarizeDangerousSql } from './sql-dangerous-summary';
+import { validateQueryExportSql } from '../../../shared/query-export';
 
 interface SqlWorkspaceProps {
   tabId: string;
@@ -66,6 +73,80 @@ const EMPTY_GRID_SELECTION: GridSelectionState = {
   selectedRowIds: [],
   selectedCell: null,
   anchorRowId: null,
+};
+
+const getQueryExportValidationMessage = (
+  validation: ReturnType<typeof validateQueryExportSql>,
+  t: ReturnType<typeof useI18n>['t']
+) => {
+  if (validation.ok) {
+    return '';
+  }
+
+  switch (validation.code) {
+    case 'empty':
+      return t('sql.exportValidationEmpty');
+    case 'multipleStatements':
+      return t('sql.exportValidationSingleStatement');
+    case 'notReadOnly':
+      return t('sql.exportValidationReadOnly', {
+        operation: validation.operation ?? 'UNKNOWN',
+      });
+    default:
+      return t('errors.sqlExecution');
+  }
+};
+
+const getQueryExportStatusTone = (job: QueryExportJobSnapshot) => {
+  switch (job.state) {
+    case 'completed':
+      return '!text-[#00ff9c]';
+    case 'failed':
+      return '!text-[#ff6b6b]';
+    case 'cancelled':
+      return '!text-[#fbbf24]';
+    default:
+      return '!text-[#a3a3a3]';
+  }
+};
+
+const getQueryExportStatusLabel = (
+  job: QueryExportJobSnapshot,
+  t: ReturnType<typeof useI18n>['t']
+) => {
+  switch (job.state) {
+    case 'completed':
+      return t('sql.exportStatusCompleted');
+    case 'failed':
+      return t('sql.exportStatusFailed');
+    case 'cancelled':
+      return t('sql.exportStatusCancelled');
+    default:
+      return t('sql.exportStatusRunning');
+  }
+};
+
+const getQueryExportStatusDetails = (
+  job: QueryExportJobSnapshot,
+  t: ReturnType<typeof useI18n>['t']
+) => {
+  const parts = [
+    t(`sql.exportFormat.${job.format}`),
+    t('dataGrid.rows', { count: job.writtenRows }),
+    t('sql.exportBytes', { count: job.writtenBytes }),
+  ];
+
+  if (job.format === 'xlsx') {
+    parts.push(t('sql.exportSheetCount', { count: job.sheetCount }));
+  }
+
+  if (job.state === 'completed') {
+    parts.push(t('sql.exportSavedTo', { filePath: job.filePath }));
+  } else if (job.state === 'failed' && job.error) {
+    parts.push(job.error);
+  }
+
+  return parts.join(' · ');
 };
 
 const getPendingChangeCount = (buffer: TableEditBuffer | null) => {
@@ -111,6 +192,8 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
   const [postApplyNotice, setPostApplyNotice] = useState<EditablePreviewNotice | null>(null);
   const [refreshLockReason, setRefreshLockReason] = useState<string | null>(null);
   const [lastExecutionKind, setLastExecutionKind] = useState<'preview' | 'custom' | null>(null);
+  const [exportFormat, setExportFormat] = useState<QueryExportFormat>('xlsx');
+  const [exportJob, setExportJob] = useState<QueryExportJobSnapshot | null>(null);
   const handledPreviewRequestRef = useRef<string | null>(null);
   const handledAutoExecuteRequestRef = useRef<PendingAutoExecuteRequest | null>(null);
   const tabType = tab?.type ?? null;
@@ -176,6 +259,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
   );
   const hasLineSelection = Boolean(executionTarget?.hasSelection);
   const displayState = getExecutionDisplayState(result, error);
+  const exportIsRunning = exportJob?.state === 'running';
   const pendingChangeCount = getPendingChangeCount(editBuffer);
   const editablePreviewViewState = getEditablePreviewViewState({
     previewTable,
@@ -435,6 +519,31 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     void handleExecute();
   }, [handleExecute, pendingAutoExecute, tabRecordId, tabType, updateTab]);
 
+  useEffect(() => {
+    if (!exportJob || exportJob.state !== 'running') {
+      return;
+    }
+
+    let cancelled = false;
+    const intervalId = window.setInterval(() => {
+      void window.api.exports
+        .getQueryExportStatus(exportJob.id)
+        .then((snapshot) => {
+          if (!cancelled && snapshot) {
+            setExportJob(snapshot);
+          }
+        })
+        .catch((pollError) => {
+          console.error('Failed to poll query export status', pollError);
+        });
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [exportJob]);
+
   const handleReplay = (sql: string) => {
     if (!tabRecordId) {
       return;
@@ -674,6 +783,57 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     });
   };
 
+  const handleStartExport = React.useCallback(async () => {
+    if (!executableSql || !tabConnectionId) {
+      return;
+    }
+
+    const validation = validateQueryExportSql(executableSql);
+    if (!validation.ok) {
+      emitGlobalError({
+        title: t('sql.exportAction'),
+        message: getQueryExportValidationMessage(validation, t),
+        type: 'unknown',
+      });
+      return;
+    }
+
+    try {
+      const result = await window.api.exports.startQueryExport(
+        tabConnectionId,
+        validation.statementSql,
+        exportFormat
+      );
+
+      if (!result.started) {
+        return;
+      }
+
+      setExportJob(result.job);
+    } catch (exportError) {
+      emitGlobalError({
+        title: t('sql.exportAction'),
+        message: getErrorMessage(exportError),
+        type: 'unknown',
+      });
+    }
+  }, [executableSql, exportFormat, t, tabConnectionId]);
+
+  const handleCancelExport = React.useCallback(async () => {
+    if (!exportJob) {
+      return;
+    }
+
+    try {
+      const snapshot = await window.api.exports.cancelQueryExport(exportJob.id);
+      if (snapshot) {
+        setExportJob(snapshot);
+      }
+    } catch (cancelError) {
+      console.error('Failed to cancel query export', cancelError);
+    }
+  }, [exportJob]);
+
   const effectiveEditBuffer =
     editablePreviewViewState.mode === 'editable' && displayState.kind === 'data'
       ? editBuffer ??
@@ -724,6 +884,36 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
                 {t('sql.abort')}
               </Button>
             )}
+            <Select
+              value={exportFormat}
+              disabled={Boolean(exportIsRunning)}
+              className="min-w-[132px] font-mono"
+              onChange={(value: QueryExportFormat) => {
+                setExportFormat(value);
+              }}
+              options={[
+                { value: 'xlsx', label: t('sql.exportFormat.xlsx') },
+                { value: 'csv', label: t('sql.exportFormat.csv') },
+                { value: 'json', label: t('sql.exportFormat.json') },
+                { value: 'tsv', label: t('sql.exportFormat.tsv') },
+              ]}
+            />
+            <Button
+              className="font-mono tracking-wider"
+              disabled={executing || !executableSql || Boolean(exportIsRunning)}
+              onClick={handleStartExport}
+            >
+              {t('sql.exportAction')}
+            </Button>
+            {exportIsRunning && (
+              <Button
+                danger
+                className="font-mono tracking-wider"
+                onClick={handleCancelExport}
+              >
+                {t('sql.exportCancel')}
+              </Button>
+            )}
           </div>
           <Text className="text-xs !text-[#737373] font-mono">
             {hasLineSelection
@@ -731,6 +921,16 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
               : t('sql.currentHint')}
           </Text>
         </div>
+        {exportJob && (
+          <div className="flex items-center justify-between gap-3 border-b border-[#333333] bg-[#0d0d0d] px-3 py-2 shrink-0">
+            <Text className={`text-xs font-mono ${getQueryExportStatusTone(exportJob)}`}>
+              {getQueryExportStatusLabel(exportJob, t)}
+            </Text>
+            <Text className="text-xs !text-[#737373] font-mono">
+              {getQueryExportStatusDetails(exportJob, t)}
+            </Text>
+          </div>
+        )}
         <div className="p-3 bg-[#0a0a0a] flex-1 min-h-0 flex flex-col">
           <SqlEditor
             value={tabContent}

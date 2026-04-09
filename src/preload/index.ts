@@ -7,6 +7,7 @@ import {
   ElectronAPI,
   LlmProvider,
   PreviewTableRef,
+  QueryExportFormat,
   TableEditMetadata,
 } from '../shared/types';
 import { SqlScript, SqlScriptInput } from '../shared/sql-scripts';
@@ -32,6 +33,14 @@ const api: ElectronAPI = {
       ipcRenderer.invoke(IpcChannels.STORAGE_SAVE_SQL_SCRIPT, input) as Promise<SqlScript>,
     deleteSqlScript: (scriptId: string) =>
       ipcRenderer.invoke(IpcChannels.STORAGE_DELETE_SQL_SCRIPT, scriptId),
+  },
+  exports: {
+    startQueryExport: (connectionId: string, sql: string, format: QueryExportFormat) =>
+      ipcRenderer.invoke(IpcChannels.EXPORT_START_QUERY, connectionId, sql, format),
+    getQueryExportStatus: (jobId: string) =>
+      ipcRenderer.invoke(IpcChannels.EXPORT_GET_QUERY_STATUS, jobId),
+    cancelQueryExport: (jobId: string) =>
+      ipcRenderer.invoke(IpcChannels.EXPORT_CANCEL_QUERY, jobId),
   },
   db: {
     testConnection: (config: ConnectionConfig | { id: string }) => 

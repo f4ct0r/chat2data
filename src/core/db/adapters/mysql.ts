@@ -1,8 +1,21 @@
-import { createConnection, Connection } from 'mysql2/promise';
-import { DatabaseDriver, QueryResult } from '../types';
+import {
+  FieldPacket,
+} from 'mysql2';
+import {
+  createConnection,
+  Connection as PromiseConnection,
+} from 'mysql2/promise';
+import {
+  DatabaseDriver,
+  QueryResult,
+  QueryStreamOptions,
+  QueryStreamResult,
+  QueryStreamSink,
+} from '../types';
 import {
   BatchExecutionResult,
   DecryptedConnectionConfig,
+  QueryRow,
   PreviewTableRef,
   TableEditMetadata,
 } from '../../../shared/types';
@@ -80,8 +93,11 @@ const pickMysqlKey = (rows: MysqlConstraintRow[]): TableEditMetadata['key'] => {
 };
 
 export class MysqlAdapter implements DatabaseDriver {
-  private connection: Connection | null = null;
+  private connection: PromiseConnection | null = null;
+  // mysql2/promise wraps the core connection; export streaming needs the raw stream API.
+  private rawConnection: import('mysql2').Connection | null = null;
   private config: DecryptedConnectionConfig | null = null;
+  private currentStreamDestroy: (() => void) | null = null;
 
   async connect(config: DecryptedConnectionConfig): Promise<void> {
     if (this.connection) {
@@ -98,13 +114,19 @@ export class MysqlAdapter implements DatabaseDriver {
       database: config.database,
       multipleStatements: true,
     });
+    this.rawConnection =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((this.connection as any).connection as import('mysql2').Connection | undefined)
+      ?? null;
   }
 
   async disconnect(): Promise<void> {
     if (this.connection) {
-      await this.connection.end();
+      await this.connection.end().catch(() => undefined);
       this.connection = null;
     }
+    this.rawConnection = null;
+    this.currentStreamDestroy = null;
   }
 
   async testConnection(config: DecryptedConnectionConfig): Promise<boolean> {
@@ -183,6 +205,79 @@ export class MysqlAdapter implements DatabaseDriver {
         durationMs,
         error: error.message || String(error),
       };
+    }
+  }
+
+  async streamQuery(
+    sql: string,
+    sink: QueryStreamSink,
+    options: QueryStreamOptions = {}
+  ): Promise<QueryStreamResult> {
+    if (!this.connection) {
+      throw new Error('Not connected to database');
+    }
+    if (!this.rawConnection) {
+      throw new Error('Streaming is not available for this MySQL connection');
+    }
+
+    const batchSize = options.batchSize ?? 500;
+    const query = this.rawConnection.query(sql);
+    const stream = query.stream({ objectMode: true });
+    const abort = () => {
+      stream.destroy(Object.assign(new Error('Export cancelled'), { name: 'AbortError' }));
+      this.rawConnection?.destroy();
+    };
+    options.signal?.addEventListener('abort', abort, { once: true });
+    this.currentStreamDestroy = abort;
+
+    let rowCount = 0;
+    let columnsSent = false;
+    let bufferedRows: QueryRow[] = [];
+
+    try {
+      const columns = await new Promise<string[]>((resolve, reject) => {
+        stream.once('fields', (fields: FieldPacket[]) => {
+          resolve(fields.map((field) => field.name));
+        });
+        stream.once('error', (error) => {
+          reject(error);
+        });
+        stream.once('end', () => {
+          resolve([]);
+        });
+      });
+
+      await sink.onColumns(columns);
+      columnsSent = true;
+
+      for await (const row of stream as AsyncIterable<QueryRow>) {
+        if (options.signal?.aborted) {
+          const error = new Error('Export cancelled');
+          error.name = 'AbortError';
+          throw error;
+        }
+
+        bufferedRows.push(row);
+        if (bufferedRows.length >= batchSize) {
+          await sink.onRows(bufferedRows);
+          rowCount += bufferedRows.length;
+          bufferedRows = [];
+        }
+      }
+
+      if (!columnsSent) {
+        await sink.onColumns([]);
+      }
+
+      if (bufferedRows.length > 0) {
+        await sink.onRows(bufferedRows);
+        rowCount += bufferedRows.length;
+      }
+
+      return { rowCount };
+    } finally {
+      options.signal?.removeEventListener('abort', abort);
+      this.currentStreamDestroy = null;
     }
   }
 
@@ -330,30 +425,6 @@ export class MysqlAdapter implements DatabaseDriver {
   }
 
   async killQuery(): Promise<void> {
-    if (!this.connection || !this.config) {
-      return;
-    }
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const threadId = (this.connection as any).threadId || (this.connection as any).connection?.threadId;
-      if (!threadId) {
-        throw new Error('Could not find threadId for current connection');
-      }
-
-      // Create a new connection just to kill the query
-      const killConn = await createConnection({
-        host: this.config.host,
-        port: this.config.port,
-        user: this.config.username,
-        password: this.config.password,
-        database: this.config.database,
-      });
-
-      await killConn.query(`KILL QUERY ${threadId}`);
-      await killConn.end();
-    } catch (error) {
-      console.error('Failed to kill MySQL query:', error);
-      throw error;
-    }
+    this.currentStreamDestroy?.();
   }
 }

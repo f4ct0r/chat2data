@@ -1,5 +1,12 @@
 import Database from 'better-sqlite3';
-import { DatabaseDriver, QueryResult } from '../types';
+import {
+  DatabaseDriver,
+  QueryResult,
+  QueryStreamOptions,
+  QueryStreamResult,
+  QueryStreamSink,
+} from '../types';
+import type { QueryRow } from '../../../shared/types';
 import {
   BatchExecutionResult,
   DecryptedConnectionConfig,
@@ -118,6 +125,50 @@ export class SqliteAdapter implements DatabaseDriver {
         error: getSqliteErrorMessage(error),
       };
     }
+  }
+
+  async streamQuery(
+    sql: string,
+    sink: QueryStreamSink,
+    options: QueryStreamOptions = {}
+  ): Promise<QueryStreamResult> {
+    if (!this.db) {
+      throw new Error('Not connected to database');
+    }
+
+    const statement = this.db.prepare(sql);
+    if (!statement.reader) {
+      throw new Error('Export only supports row-returning statements.');
+    }
+
+    const columns = statement.columns().map((column) => column.name);
+    await sink.onColumns(columns);
+
+    const batchSize = options.batchSize ?? 500;
+    let rowCount = 0;
+    let bufferedRows: QueryRow[] = [];
+
+    for (const row of statement.iterate() as Iterable<QueryRow>) {
+      if (options.signal?.aborted) {
+        const error = new Error('Export cancelled');
+        error.name = 'AbortError';
+        throw error;
+      }
+
+      bufferedRows.push(row);
+      if (bufferedRows.length >= batchSize) {
+        await sink.onRows(bufferedRows);
+        rowCount += bufferedRows.length;
+        bufferedRows = [];
+      }
+    }
+
+    if (bufferedRows.length > 0) {
+      await sink.onRows(bufferedRows);
+      rowCount += bufferedRows.length;
+    }
+
+    return { rowCount };
   }
 
   async getDatabases(): Promise<string[]> {

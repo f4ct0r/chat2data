@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { join } from 'path';
 import { IpcChannels } from '../shared/ipc-channels';
 import { sqliteService } from '../core/storage/sqlite-service';
@@ -11,8 +11,11 @@ import { SqlScriptInput } from '../shared/sql-scripts';
 import { randomUUID } from 'crypto';
 import { completionSchemaService } from '../core/agent/completion-schema-service';
 import { sqlScriptStore } from '../core/storage/sql-script-store';
+import { QueryExportFormat } from '../shared/types';
+import { QueryExportService } from '../core/export/query-export-service';
 
 const shouldOpenDevTools = process.env.CHAT2DATA_OPEN_DEVTOOLS === 'true';
+const queryExportService = new QueryExportService();
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -45,6 +48,21 @@ function createWindow() {
     mainWindow.loadFile(join(__dirname, '../index.html'));
   }
 }
+
+const getExportFileFilters = (format: QueryExportFormat) => {
+  switch (format) {
+    case 'xlsx':
+      return [{ name: 'Excel Workbook', extensions: ['xlsx'] }];
+    case 'csv':
+      return [{ name: 'CSV', extensions: ['csv'] }];
+    case 'json':
+      return [{ name: 'JSON', extensions: ['json'] }];
+    case 'tsv':
+      return [{ name: 'TSV', extensions: ['tsv'] }];
+    default:
+      return [{ name: 'Export File', extensions: [format] }];
+  }
+};
 
 // Ignore autofill errors
 app.commandLine.appendSwitch('disable-features', 'AutofillServerCommunication');
@@ -159,6 +177,40 @@ app.whenReady().then(() => {
 
   ipcMain.handle(IpcChannels.STORAGE_DELETE_SQL_SCRIPT, async (_event, scriptId: string) => {
     sqlScriptStore.delete(scriptId);
+  });
+
+  ipcMain.handle(IpcChannels.EXPORT_START_QUERY, async (_event, connectionId: string, sql: string, format: QueryExportFormat) => {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath: `query-export.${format}`,
+      filters: getExportFileFilters(format),
+    });
+
+    if (canceled || !filePath) {
+      return {
+        started: false,
+        reason: 'cancelled',
+      };
+    }
+
+    const job = await queryExportService.startQueryExport({
+      connectionId,
+      sql,
+      format,
+      filePath,
+    });
+
+    return {
+      started: true,
+      job,
+    };
+  });
+
+  ipcMain.handle(IpcChannels.EXPORT_GET_QUERY_STATUS, async (_event, jobId: string) => {
+    return queryExportService.getQueryExportStatus(jobId);
+  });
+
+  ipcMain.handle(IpcChannels.EXPORT_CANCEL_QUERY, async (_event, jobId: string) => {
+    return queryExportService.cancelQueryExport(jobId);
   });
 
   // Database Handlers

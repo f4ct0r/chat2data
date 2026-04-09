@@ -18,6 +18,8 @@ const dataGridPropsState = vi.hoisted(() => ({
 
 const buttonPropsState = vi.hoisted(() => ({
   executeOnClick: null as null | (() => void | Promise<void>),
+  exportOnClick: null as null | (() => void | Promise<void>),
+  cancelExportOnClick: null as null | (() => void | Promise<void>),
 }));
 
 const queryHistoryPropsState = vi.hoisted(() => ({
@@ -59,6 +61,9 @@ const dangerousSummaryState = vi.hoisted(() => ({
   },
 }));
 const executeQueryMock = vi.hoisted(() => vi.fn());
+const startQueryExportMock = vi.hoisted(() => vi.fn());
+const getQueryExportStatusMock = vi.hoisted(() => vi.fn());
+const cancelQueryExportMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../SqlEditor', () => ({
   __esModule: true,
@@ -107,9 +112,18 @@ vi.mock('antd', () => ({
       buttonPropsState.executeOnClick = onClick ?? null;
     }
 
+    if (typeof children === 'string' && children.includes('导出')) {
+      buttonPropsState.exportOnClick = onClick ?? null;
+    }
+
+    if (typeof children === 'string' && children.includes('取消导出')) {
+      buttonPropsState.cancelExportOnClick = onClick ?? null;
+    }
+
     return <button>{children}</button>;
   },
   Modal: { confirm: modalConfirmMock },
+  Select: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   Tabs: ({
     className,
     items,
@@ -150,9 +164,10 @@ vi.mock('../../store/tabStore', () => ({
 
 vi.mock('../../../core/security/sql-classifier', () => ({
   SqlClassifier: {
-    classify: () => ({ level: 'ReadOnly', operation: 'SELECT' }),
+    classify: () => ({ level: 'SAFE', operation: 'SELECT' }),
   },
   SqlRiskLevel: {
+    SAFE: 'SAFE',
     DANGEROUS: 'Dangerous',
   },
 }));
@@ -201,11 +216,16 @@ describe('SqlWorkspace layout', () => {
     ];
     dataGridPropsState.editablePreviewPresent = false;
     buttonPropsState.executeOnClick = null;
+    buttonPropsState.exportOnClick = null;
+    buttonPropsState.cancelExportOnClick = null;
     queryHistoryPropsState.onReplay = null;
     dangerousSummaryState.current = null;
     updateTabMock.mockReset();
     modalConfirmMock.mockReset();
     executeQueryMock.mockReset();
+    startQueryExportMock.mockReset();
+    getQueryExportStatusMock.mockReset();
+    cancelQueryExportMock.mockReset();
     updateTabMock.mockImplementation((tabId: string, patch: Partial<TabData>) => {
       tabsState.current = tabsState.current.map((tab) =>
         tab.id === tabId ? { ...tab, ...patch } : tab
@@ -217,8 +237,33 @@ describe('SqlWorkspace layout', () => {
       rowCount: 1,
       durationMs: 5,
     });
+    startQueryExportMock.mockResolvedValue({
+      started: true,
+      job: {
+        id: 'export-job-1',
+        connectionId: 'conn-1',
+        format: 'xlsx',
+        state: 'running',
+        phase: 'preparing',
+        filePath: '/tmp/query-export.xlsx',
+        writtenRows: 0,
+        writtenBytes: 0,
+        sheetCount: 0,
+        cancellationRequested: false,
+        startedAt: 1,
+        updatedAt: 1,
+      },
+    });
+    getQueryExportStatusMock.mockResolvedValue(null);
+    cancelQueryExportMock.mockResolvedValue(null);
     vi.stubGlobal('window', {
+      dispatchEvent: vi.fn(),
       api: {
+        exports: {
+          startQueryExport: startQueryExportMock,
+          getQueryExportStatus: getQueryExportStatusMock,
+          cancelQueryExport: cancelQueryExportMock,
+        },
         db: {
           executeQuery: executeQueryMock,
           getTableEditMetadata: vi.fn(),
@@ -378,6 +423,15 @@ describe('SqlWorkspace layout', () => {
     await buttonPropsState.executeOnClick?.();
 
     expect(modalConfirmMock).not.toHaveBeenCalled();
+  });
+
+  it('starts a query export for the current SQL', async () => {
+    renderToStaticMarkup(<SqlWorkspace tabId="tab-1" />);
+
+    expect(buttonPropsState.exportOnClick).not.toBeNull();
+    await buttonPropsState.exportOnClick?.();
+
+    expect(startQueryExportMock).toHaveBeenCalledWith('conn-1', 'select 1;', 'xlsx');
   });
 });
 

@@ -107,6 +107,38 @@ export interface StorageVerificationResult {
   decryptedValuePreview: string | null;
 }
 
+export type QueryExportFormat = 'xlsx' | 'csv' | 'json' | 'tsv';
+export type QueryExportJobState = 'running' | 'completed' | 'failed' | 'cancelled';
+export type QueryExportJobPhase = 'preparing' | 'streaming' | 'finalizing';
+
+export interface QueryExportJobSnapshot {
+  id: string;
+  connectionId: string;
+  format: QueryExportFormat;
+  state: QueryExportJobState;
+  phase: QueryExportJobPhase;
+  filePath: string;
+  writtenRows: number;
+  writtenBytes: number;
+  sheetCount: number;
+  message?: string;
+  error?: string;
+  cancellationRequested: boolean;
+  startedAt: number;
+  updatedAt: number;
+  completedAt?: number;
+}
+
+export type QueryExportStartResult =
+  | {
+      started: true;
+      job: QueryExportJobSnapshot;
+    }
+  | {
+      started: false;
+      reason: 'cancelled';
+    };
+
 export interface LlmProvider {
   id: string;
   name: string;
@@ -134,6 +166,15 @@ export interface ElectronAPI {
     getSqlScript: (scriptId: string) => Promise<SqlScript | null>;
     saveSqlScript: (input: SqlScriptInput) => Promise<SqlScript>;
     deleteSqlScript: (scriptId: string) => Promise<void>;
+  };
+  exports: {
+    startQueryExport: (
+      connectionId: string,
+      sql: string,
+      format: QueryExportFormat
+    ) => Promise<QueryExportStartResult>;
+    getQueryExportStatus: (jobId: string) => Promise<QueryExportJobSnapshot | null>;
+    cancelQueryExport: (jobId: string) => Promise<QueryExportJobSnapshot | null>;
   };
   // Database capabilities
   db: {

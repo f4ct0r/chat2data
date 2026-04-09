@@ -13,6 +13,11 @@ export enum IpcChannels {
   STORAGE_SAVE_SQL_SCRIPT = 'storage:saveSqlScript',
   STORAGE_DELETE_SQL_SCRIPT = 'storage:deleteSqlScript',
 
+  // Query Export
+  EXPORT_START_QUERY = 'export:startQuery',
+  EXPORT_GET_QUERY_STATUS = 'export:getQueryStatus',
+  EXPORT_CANCEL_QUERY = 'export:cancelQuery',
+
   // Database
   DB_TEST_CONNECTION = 'db:testConnection',
   DB_CONNECT = 'db:connect',

@@ -1,5 +1,11 @@
 import { Client } from 'pg';
-import { DatabaseDriver, QueryResult } from '../types';
+import {
+  DatabaseDriver,
+  QueryResult,
+  QueryStreamOptions,
+  QueryStreamResult,
+  QueryStreamSink,
+} from '../types';
 import {
   BatchExecutionResult,
   DecryptedConnectionConfig,
@@ -161,6 +167,65 @@ export class PostgresAdapter implements DatabaseDriver {
     }
   }
 
+  async streamQuery(
+    sql: string,
+    sink: QueryStreamSink,
+    options: QueryStreamOptions = {}
+  ): Promise<QueryStreamResult> {
+    if (!this.client) {
+      throw new Error('Not connected to database');
+    }
+
+    const batchSize = options.batchSize ?? 500;
+    const statementSql = sql.trim().replace(/;+\s*$/, '');
+    const cursorName = `chat2data_export_${globalThis.crypto.randomUUID().replaceAll('-', '_')}`;
+    let rowCount = 0;
+    let columnsSent = false;
+
+    const throwIfAborted = () => {
+      if (options.signal?.aborted) {
+        const error = new Error('Export cancelled');
+        error.name = 'AbortError';
+        throw error;
+      }
+    };
+
+    try {
+      await this.client.query('BEGIN');
+      await this.client.query(`DECLARE ${cursorName} NO SCROLL CURSOR FOR ${statementSql}`);
+
+      for (;;) {
+        throwIfAborted();
+
+        const result = await this.client.query(`FETCH FORWARD ${batchSize} FROM ${cursorName}`);
+        if (!columnsSent) {
+          await sink.onColumns(result.fields?.map((field) => field.name) ?? []);
+          columnsSent = true;
+        }
+
+        const rows = result.rows ?? [];
+        if (rows.length === 0) {
+          break;
+        }
+
+        await sink.onRows(rows);
+        rowCount += rows.length;
+      }
+
+      await this.client.query(`CLOSE ${cursorName}`);
+      await this.client.query('COMMIT');
+
+      return { rowCount };
+    } catch (error) {
+      try {
+        await this.client.query('ROLLBACK');
+      } catch {
+        // ignore rollback failures during export cleanup
+      }
+      throw error;
+    }
+  }
+
   async getDatabases(): Promise<string[]> {
     if (!this.client) throw new Error('Not connected');
     const result = await this.client.query('SELECT datname FROM pg_database WHERE datistemplate = false');
@@ -296,27 +361,26 @@ export class PostgresAdapter implements DatabaseDriver {
     if (!this.client || !this.config) {
       return;
     }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pid = (this.client as any).processID;
+    if (!pid) {
+      return;
+    }
+
+    const cancelClient = new Client({
+      host: this.config.host,
+      port: this.config.port,
+      user: this.config.username,
+      password: this.config.password,
+      database: this.config.database,
+    });
+
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pid = (this.client as any).processID;
-      if (!pid) {
-        throw new Error('Could not find processID for current connection');
-      }
-
-      const killClient = new Client({
-        host: this.config.host,
-        port: this.config.port,
-        user: this.config.username,
-        password: this.config.password,
-        database: this.config.database,
-      });
-
-      await killClient.connect();
-      await killClient.query('SELECT pg_cancel_backend($1)', [pid]);
-      await killClient.end();
-    } catch (error) {
-      console.error('Failed to kill PostgreSQL query:', error);
-      throw error;
+      await cancelClient.connect();
+      await cancelClient.query('SELECT pg_cancel_backend($1)', [pid]);
+    } finally {
+      await cancelClient.end().catch(() => undefined);
     }
   }
 }

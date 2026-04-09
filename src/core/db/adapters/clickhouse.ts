@@ -1,5 +1,11 @@
 import { createClient, ClickHouseClient } from '@clickhouse/client';
-import { DatabaseDriver, QueryResult } from '../types';
+import {
+  DatabaseDriver,
+  QueryResult,
+  QueryStreamOptions,
+  QueryStreamResult,
+  QueryStreamSink,
+} from '../types';
 import {
   BatchExecutionResult,
   DecryptedConnectionConfig,
@@ -129,6 +135,85 @@ export class ClickhouseAdapter implements DatabaseDriver {
         durationMs,
         error: error.message || String(error),
       };
+    }
+  }
+
+  async streamQuery(
+    sql: string,
+    sink: QueryStreamSink,
+    options: QueryStreamOptions = {}
+  ): Promise<QueryStreamResult> {
+    if (!this.client) {
+      throw new Error('Not connected to database');
+    }
+
+    this.currentQueryId = globalThis.crypto.randomUUID();
+    const resultSet = await this.client.query({
+      query: sql,
+      format: 'JSONCompactEachRowWithNamesAndTypes',
+      query_id: this.currentQueryId,
+    });
+
+    const abort = () => {
+      resultSet.close();
+      void this.killQuery().catch(() => undefined);
+    };
+    options.signal?.addEventListener('abort', abort, { once: true });
+
+    let rowCount = 0;
+    let columns: string[] | null = null;
+    let skipTypesRow = false;
+    let bufferedRows: Array<Record<string, unknown>> = [];
+    const batchSize = options.batchSize ?? 500;
+
+    try {
+      for await (const rowChunk of resultSet.stream() as AsyncIterable<Array<{ json<T>(): T }>>) {
+        for (const row of rowChunk) {
+          if (options.signal?.aborted) {
+            const error = new Error('Export cancelled');
+            error.name = 'AbortError';
+            throw error;
+          }
+
+          const parsedRow = row.json<unknown>();
+          if (!columns) {
+            columns = Array.isArray(parsedRow) ? parsedRow.map((value) => String(value)) : [];
+            await sink.onColumns(columns);
+            skipTypesRow = true;
+            continue;
+          }
+
+          if (skipTypesRow) {
+            skipTypesRow = false;
+            continue;
+          }
+
+          const values = Array.isArray(parsedRow) ? parsedRow : [];
+          bufferedRows.push(
+            Object.fromEntries(columns.map((column, index) => [column, values[index]]))
+          );
+
+          if (bufferedRows.length >= batchSize) {
+            await sink.onRows(bufferedRows);
+            rowCount += bufferedRows.length;
+            bufferedRows = [];
+          }
+        }
+      }
+
+      if (!columns) {
+        await sink.onColumns([]);
+      }
+
+      if (bufferedRows.length > 0) {
+        await sink.onRows(bufferedRows);
+        rowCount += bufferedRows.length;
+      }
+
+      return { rowCount };
+    } finally {
+      options.signal?.removeEventListener('abort', abort);
+      this.currentQueryId = null;
     }
   }
 

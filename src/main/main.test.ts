@@ -8,6 +8,10 @@ const browserWindowLoadURL = vi.fn();
 const browserWindowLoadFile = vi.fn();
 const browserWindowOpenDevTools = vi.fn();
 const browserWindowConsoleOn = vi.fn();
+const showSaveDialog = vi.fn();
+const startQueryExport = vi.fn();
+const getQueryExportStatus = vi.fn();
+const cancelQueryExport = vi.fn();
 
 class MockBrowserWindow {
   static getAllWindows = vi.fn(() => []);
@@ -32,6 +36,9 @@ vi.mock('electron', () => ({
     quit: appQuit,
   },
   BrowserWindow: MockBrowserWindow,
+  dialog: {
+    showSaveDialog,
+  },
   ipcMain: {
     handle,
   },
@@ -106,6 +113,14 @@ vi.mock('../core/storage/sql-script-store', () => ({
   },
 }));
 
+vi.mock('../core/export/query-export-service', () => ({
+  QueryExportService: class {
+    startQueryExport = startQueryExport;
+    getQueryExportStatus = getQueryExportStatus;
+    cancelQueryExport = cancelQueryExport;
+  },
+}));
+
 describe('main bootstrap', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -125,5 +140,55 @@ describe('main bootstrap', () => {
     expect(handle).not.toHaveBeenCalled();
     expect(browserWindowLoadURL).not.toHaveBeenCalled();
     expect(browserWindowLoadFile).not.toHaveBeenCalled();
+  });
+
+  it('registers query export handlers and delegates export startup to the export service', async () => {
+    startQueryExport.mockResolvedValue({
+      id: 'job-1',
+      connectionId: 'conn-1',
+      format: 'csv',
+      state: 'running',
+      phase: 'preparing',
+      filePath: '/tmp/users.csv',
+      writtenRows: 0,
+      writtenBytes: 0,
+      sheetCount: 1,
+      cancellationRequested: false,
+      startedAt: 1,
+      updatedAt: 1,
+    });
+    showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: '/tmp/users.csv',
+    });
+
+    await import('./main');
+    await Promise.resolve();
+
+    const startHandler = handle.mock.calls.find(
+      ([channel]) => channel === 'export:startQuery'
+    )?.[1];
+    expect(startHandler).toBeTypeOf('function');
+
+    const result = await startHandler({}, 'conn-1', 'SELECT 1;', 'csv');
+
+    expect(showSaveDialog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultPath: 'query-export.csv',
+      })
+    );
+    expect(startQueryExport).toHaveBeenCalledWith({
+      connectionId: 'conn-1',
+      sql: 'SELECT 1;',
+      format: 'csv',
+      filePath: '/tmp/users.csv',
+    });
+    expect(result).toEqual({
+      started: true,
+      job: expect.objectContaining({
+        id: 'job-1',
+        filePath: '/tmp/users.csv',
+      }),
+    });
   });
 });

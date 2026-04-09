@@ -1,5 +1,12 @@
 import * as sql from 'mssql';
-import { DatabaseDriver, QueryResult } from '../types';
+import {
+  DatabaseDriver,
+  QueryResult,
+  QueryStreamOptions,
+  QueryStreamResult,
+  QueryStreamSink,
+} from '../types';
+import type { QueryRow } from '../../../shared/types';
 import {
   BatchExecutionResult,
   DecryptedConnectionConfig,
@@ -163,6 +170,138 @@ export class MssqlAdapter implements DatabaseDriver {
     }
   }
 
+  async streamQuery(
+    sqlQuery: string,
+    sink: QueryStreamSink,
+    options: QueryStreamOptions = {}
+  ): Promise<QueryStreamResult> {
+    if (!this.pool) {
+      throw new Error('Not connected to database');
+    }
+
+    const request = this.pool.request();
+    request.stream = true;
+    this.currentRequest = request;
+
+    const batchSize = options.batchSize ?? 500;
+    let rowCount = 0;
+    let columnsSent = false;
+    let bufferedRows: QueryRow[] = [];
+    let settled = false;
+
+    const createAbortError = () => {
+      const error = new Error('Export cancelled');
+      error.name = 'AbortError';
+      return error;
+    };
+
+    const abort = () => {
+      request.cancel();
+    };
+    options.signal?.addEventListener('abort', abort, { once: true });
+
+    return await new Promise<QueryStreamResult>((resolve, reject) => {
+      const cleanup = () => {
+        this.currentRequest = null;
+        options.signal?.removeEventListener('abort', abort);
+      };
+
+      const fail = (error: unknown) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        cleanup();
+        reject(error);
+      };
+
+      const succeed = (result: QueryStreamResult) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        cleanup();
+        resolve(result);
+      };
+
+      const flushRows = async () => {
+        if (bufferedRows.length === 0) {
+          return;
+        }
+
+        const rows = bufferedRows;
+        bufferedRows = [];
+        await sink.onRows(rows);
+        rowCount += rows.length;
+      };
+
+      request.on('recordset', (columns) => {
+        if (columnsSent) {
+          fail(new Error('Export only supports a single result set.'));
+          return;
+        }
+
+        columnsSent = true;
+        request.pause();
+        Promise.resolve(
+          sink.onColumns(
+            Object.values(columns as Record<string, { name?: string }>).map(
+              (column) => column.name ?? ''
+            )
+          )
+        )
+          .then(() => {
+            request.resume();
+          })
+          .catch((error) => {
+            fail(error);
+          });
+      });
+
+      request.on('row', (row) => {
+        bufferedRows.push(row);
+
+        if (bufferedRows.length < batchSize) {
+          return;
+        }
+
+        request.pause();
+        void flushRows()
+          .then(() => {
+            request.resume();
+          })
+          .catch((error) => {
+            fail(error);
+          });
+      });
+
+      request.on('error', (error: Error & { code?: string }) => {
+        if (options.signal?.aborted || error.code === 'ECANCEL') {
+          fail(createAbortError());
+          return;
+        }
+
+        fail(error);
+      });
+
+      request.on('done', () => {
+        void flushRows()
+          .then(() => {
+            succeed({ rowCount });
+          })
+          .catch((error) => {
+            fail(error);
+          });
+      });
+
+      void request.query(sqlQuery).catch((error) => {
+        fail(error);
+      });
+    });
+  }
+
   async getDatabases(): Promise<string[]> {
     if (!this.pool) throw new Error('Not connected');
     const result = await this.pool.request().query("SELECT name FROM sys.databases WHERE state_desc = 'ONLINE'");
@@ -294,8 +433,6 @@ export class MssqlAdapter implements DatabaseDriver {
   }
 
   async killQuery(): Promise<void> {
-    if (this.currentRequest) {
-      this.currentRequest.cancel();
-    }
+    this.currentRequest?.cancel();
   }
 }

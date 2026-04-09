@@ -2,11 +2,26 @@ import {
   BatchExecutionResult,
   DecryptedConnectionConfig,
   PreviewTableRef,
+  QueryRow,
   QueryResult,
   TableEditMetadata,
 } from '../../shared/types';
 
 export type { QueryResult };
+
+export interface QueryStreamSink {
+  onColumns(columns: string[]): Promise<void> | void;
+  onRows(rows: QueryRow[]): Promise<void> | void;
+}
+
+export interface QueryStreamOptions {
+  batchSize?: number;
+  signal?: AbortSignal;
+}
+
+export interface QueryStreamResult {
+  rowCount: number;
+}
 
 export interface DatabaseDriver {
   /** 建立数据库连接 */
@@ -20,6 +35,13 @@ export interface DatabaseDriver {
   
   /** 执行 SQL 查询 */
   executeQuery(sql: string): Promise<QueryResult>;
+
+  /** 流式读取查询结果 */
+  streamQuery?(
+    sql: string,
+    sink: QueryStreamSink,
+    options?: QueryStreamOptions
+  ): Promise<QueryStreamResult>;
   
   /** 获取所有数据库 */
   getDatabases(): Promise<string[]>;
