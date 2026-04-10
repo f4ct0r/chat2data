@@ -4,6 +4,11 @@ import type { TableEditBuffer } from '../../features/table-edit-buffer';
 import { QueryRow, QueryResult } from '../../../shared/types';
 import { useI18n } from '../../i18n/i18n-context';
 import {
+  getClipboardTextForGridSelection,
+  isCellWithinGridSelection,
+  resolveGridCopyShortcutText,
+} from './data-grid-clipboard';
+import {
   focusGridKeyboardTarget,
   getDefaultColumnWidth,
   getInitialColumnWidths,
@@ -39,12 +44,28 @@ interface DataGridProps {
   onEditCancel?: () => void;
   onDeleteAction?: (action: GridDeleteAction) => void;
   onEscapeAction?: (action: GridEscapeAction) => void;
+  onPasteClipboard?: (clipboardText: string) => void;
   restorableDeletedRowIds?: string[];
 }
 
 type ViewportSize = {
   width: number;
   height: number;
+};
+
+type RenderedRowState = {
+  rowId: string;
+  row: QueryRow;
+  deleted: boolean;
+  changedColumns: string[];
+};
+
+const EMPTY_GRID_SELECTION: GridSelectionState = {
+  selectedRowIds: [],
+  selectedCell: null,
+  selectedRange: null,
+  anchorRowId: null,
+  anchorCell: null,
 };
 
 const formatCellValue = (value: unknown) =>
@@ -79,6 +100,7 @@ const DataGrid: React.FC<DataGridProps> = ({
   onEditCancel,
   onDeleteAction,
   onEscapeAction,
+  onPasteClipboard,
   restorableDeletedRowIds = [],
 }) => {
   const { t } = useI18n();
@@ -90,15 +112,23 @@ const DataGrid: React.FC<DataGridProps> = ({
     startX: number;
     startWidth: number;
   } | null>(null);
+  const selectionDragActiveRef = useRef(false);
 
   const { columns, rows } = result;
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() =>
     getInitialColumnWidths(columns)
   );
+  const [internalSelection, setInternalSelection] = useState<GridSelectionState>(EMPTY_GRID_SELECTION);
 
   useEffect(() => {
     setColumnWidths((currentWidths) => getInitialColumnWidths(columns, currentWidths));
   }, [columns]);
+
+  useEffect(() => {
+    if (!editablePreview) {
+      setInternalSelection(EMPTY_GRID_SELECTION);
+    }
+  }, [editablePreview, result]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -120,6 +150,7 @@ const DataGrid: React.FC<DataGridProps> = ({
 
     const handlePointerUp = () => {
       resizeStateRef.current = null;
+      selectionDragActiveRef.current = false;
     };
 
     window.addEventListener('pointermove', handlePointerMove);
@@ -210,17 +241,51 @@ const DataGrid: React.FC<DataGridProps> = ({
   }
 
   const editableRows = editablePreview?.buffer.rows ?? [];
-  const selectedRowIds = editablePreview?.selection.selectedRowIds ?? [];
-  const selectedCell = editablePreview?.selection.selectedCell ?? null;
-  const anchorRowId = editablePreview?.selection.anchorRowId ?? null;
-  const deletedRowIds = editableRows.filter((row) => row.deleted).map((row) => row.rowId);
-  const rowOrder = editableRows.map((row) => row.rowId);
+  const renderedRows: RenderedRowState[] = rows.map((row, index) => {
+    const bufferRow = editableRows[index];
+    const renderedRow = getRowState(row, bufferRow);
+
+    return {
+      rowId: bufferRow?.rowId ?? `row-${index}`,
+      row: renderedRow.row,
+      deleted: renderedRow.deleted,
+      changedColumns: renderedRow.changedColumns,
+    };
+  });
+  const selection = editablePreview?.selection ?? internalSelection;
+  const selectedRowIds = selection.selectedRowIds;
+  const selectedCell = selection.selectedCell;
+  const rowOrder = renderedRows.map((row) => row.rowId);
+  const deletedRowIds = renderedRows.filter((row) => row.deleted).map((row) => row.rowId);
   const isEditable = Boolean(editablePreview);
   const colWidths = columns.map((col) => columnWidths[col] ?? getDefaultColumnWidth(col));
   const totalWidth = colWidths.reduce((sum, width) => sum + width, 0) + 48;
 
   const emitSelectionChange = (nextSelection: GridSelectionState) => {
+    if (editablePreview) {
+      onSelectionChange?.(nextSelection);
+      return;
+    }
+
+    setInternalSelection(nextSelection);
     onSelectionChange?.(nextSelection);
+  };
+
+  const selectCell = (rowId: string, column: string, shiftKey: boolean) => {
+    const nextRequest = resolveGridCellSelectionRequest({
+      ...selection,
+      cell: { rowId, column },
+      rowOrder,
+      columnOrder: columns,
+      shiftKey,
+      deletedRowIds,
+    });
+
+    if (nextRequest.shouldFocusGrid) {
+      focusGridKeyboardTarget(gridKeyboardTargetRef.current);
+    }
+
+    emitSelectionChange(nextRequest.selection);
   };
 
   const handleRowSelection = (
@@ -232,35 +297,13 @@ const DataGrid: React.FC<DataGridProps> = ({
     }
 
     const nextRequest = resolveGridRowSelectionRequest({
-      selectedRowIds,
-      selectedCell,
-      anchorRowId,
+      ...selection,
       rowId,
       rowOrder,
       shiftKey: event.shiftKey,
       metaKey: event.metaKey,
       ctrlKey: event.ctrlKey,
       platform: window.navigator.platform,
-      deletedRowIds,
-    });
-
-    if (nextRequest.shouldFocusGrid) {
-      focusGridKeyboardTarget(gridKeyboardTargetRef.current);
-    }
-
-    emitSelectionChange(nextRequest.selection);
-  };
-
-  const handleCellSelection = (rowId: string, column: string) => {
-    if (!editablePreview) {
-      return;
-    }
-
-    const nextRequest = resolveGridCellSelectionRequest({
-      selectedRowIds,
-      selectedCell,
-      anchorRowId,
-      cell: { rowId, column },
       deletedRowIds,
     });
 
@@ -293,9 +336,21 @@ const DataGrid: React.FC<DataGridProps> = ({
     onEditStart?.(nextRequest.cell);
   };
 
-  const handleKeyDownCapture = (
-    event: React.KeyboardEvent<HTMLDivElement>
-  ) => {
+  const handleKeyDownCapture = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const copyShortcutText = resolveGridCopyShortcutText({
+      key: event.key,
+      metaKey: event.metaKey,
+      ctrlKey: event.ctrlKey,
+      isEditingCell: Boolean(editablePreview?.editingCell),
+      selection,
+      columns,
+      rows: renderedRows.map(({ rowId, row }) => ({ rowId, row })),
+    });
+
+    if (copyShortcutText) {
+      void navigator.clipboard?.writeText?.(copyShortcutText);
+    }
+
     if (!editablePreview) {
       return;
     }
@@ -317,11 +372,14 @@ const DataGrid: React.FC<DataGridProps> = ({
     const nextInteraction = resolveGridDeleteKeyboardInteraction({
       selectedRowIds,
       selectedCell,
+      selectedRange: selection.selectedRange,
       isEditingCell: Boolean(editablePreview.editingCell),
       key: event.key,
       metaKey: event.metaKey,
       ctrlKey: event.ctrlKey,
       platform: window.navigator.platform,
+      rowOrder,
+      columnOrder: columns,
       deletedRowIds,
       canHandleDeleteAction: Boolean(onDeleteAction),
     });
@@ -335,13 +393,49 @@ const DataGrid: React.FC<DataGridProps> = ({
     onDeleteAction?.(nextInteraction.action);
   };
 
+  const handleCopy = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    if (editablePreview?.editingCell) {
+      return;
+    }
+
+    const clipboardText = getClipboardTextForGridSelection({
+      selection,
+      columns,
+      rows: renderedRows.map(({ rowId, row }) => ({ rowId, row })),
+    });
+
+    if (!clipboardText) {
+      return;
+    }
+
+    event.preventDefault();
+    event.clipboardData.setData('text/plain', clipboardText);
+  };
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    if (!editablePreview || !onPasteClipboard || editablePreview.editingCell) {
+      return;
+    }
+
+    const clipboardText = event.clipboardData.getData('text/plain');
+    if (!clipboardText) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    onPasteClipboard(clipboardText);
+  };
+
   return (
     <div
       ref={gridKeyboardTargetRef}
       className="flex-1 min-h-0 w-full flex flex-col overflow-hidden border border-[#333333] rounded-sm bg-[#050505] font-mono text-[#a3a3a3]"
       data-grid-editable={isEditable ? 'true' : undefined}
-      tabIndex={editablePreview ? 0 : undefined}
+      tabIndex={0}
       onKeyDownCapture={handleKeyDownCapture}
+      onCopy={handleCopy}
+      onPaste={handlePaste}
     >
       <div
         ref={parentRef}
@@ -386,12 +480,12 @@ const DataGrid: React.FC<DataGridProps> = ({
             }}
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const bufferRow = editableRows[virtualRow.index];
-              const renderedRow = getRowState(rows[virtualRow.index] ?? {}, bufferRow);
-              const rowId = bufferRow?.rowId ?? null;
-              const isRowSelected = Boolean(
-                rowId && selectedRowIds.includes(rowId)
-              );
+              const renderedRow = renderedRows[virtualRow.index];
+              if (!renderedRow) {
+                return null;
+              }
+
+              const isRowSelected = selectedRowIds.includes(renderedRow.rowId);
               const rowClassName = `absolute top-0 left-0 flex text-sm border-b border-[#1a1a1a] hover:bg-[#FF5722]/10 hover:text-[#00ff00] transition-colors ${
                 virtualRow.index % 2 === 0 ? 'bg-[#0a0a0a]' : 'bg-[#050505]'
               } ${
@@ -412,10 +506,10 @@ const DataGrid: React.FC<DataGridProps> = ({
                   }}
                 >
                   <div
-                    className="flex-none w-12 border-r border-[#1a1a1a] px-2 py-2 text-center text-[#737373] bg-[#050505] sticky left-0 z-10"
+                    className="flex-none w-12 border-r border-[#1a1a1a] px-2 py-2 text-center text-[#737373] bg-[#050505] sticky left-0 z-10 select-none"
                     onClick={
-                      rowId && editablePreview
-                        ? (event) => handleRowSelection(rowId, event)
+                      isEditable
+                        ? (event) => handleRowSelection(renderedRow.rowId, event)
                         : undefined
                     }
                   >
@@ -429,42 +523,57 @@ const DataGrid: React.FC<DataGridProps> = ({
                   {columns.map((col, colIdx) => {
                     const value = renderedRow.row[col];
                     const displayVal = formatCellValue(value);
-                    const isDirty = Boolean(
-                      bufferRow && bufferRow.changedColumns.includes(col)
-                    );
-                    const isCellSelected = Boolean(
+                    const isDirty = renderedRow.changedColumns.includes(col);
+                    const isCellInRange = isCellWithinGridSelection({
+                      selection,
+                      rowId: renderedRow.rowId,
+                      column: col,
+                      rowOrder,
+                      columnOrder: columns,
+                    });
+                    const isCellActive = Boolean(
                       selectedCell &&
-                        rowId &&
-                        selectedCell.rowId === rowId &&
+                        selectedCell.rowId === renderedRow.rowId &&
                         selectedCell.column === col
                     );
                     const isEditingCell = Boolean(
                       editablePreview?.editingCell &&
-                        rowId &&
-                        editablePreview.editingCell.rowId === rowId &&
+                        editablePreview.editingCell.rowId === renderedRow.rowId &&
                         editablePreview.editingCell.column === col
                     );
 
                     return (
                       <div
                         key={colIdx}
-                        className={`flex-none px-4 py-2 border-r border-[#1a1a1a] truncate ${
+                        className={`flex-none px-4 py-2 border-r border-[#1a1a1a] truncate select-none ${
                           value === null ? 'text-[#737373] italic' : ''
-                        } ${isCellSelected ? 'bg-[#FF5722]/10' : ''} ${
-                          renderedRow.deleted ? 'pointer-events-none' : ''
-                        }`}
+                        } ${isCellInRange ? 'bg-[#FF5722]/10' : ''} ${
+                          isCellActive ? 'bg-[#FF5722]/20 text-[#f5f5f5]' : ''
+                        } ${renderedRow.deleted ? 'pointer-events-none' : ''}`}
                         data-cell-dirty={isDirty ? 'true' : undefined}
-                        data-cell-selected={isCellSelected ? 'true' : undefined}
+                        data-cell-selected={isCellActive ? 'true' : undefined}
+                        data-cell-in-range={isCellInRange ? 'true' : undefined}
+                        data-cell-active={isCellActive ? 'true' : undefined}
                         style={{ width: colWidths[colIdx] }}
                         title={displayVal}
-                        onClick={
-                          rowId && editablePreview
-                            ? () => handleCellSelection(rowId, col)
-                            : undefined
-                        }
+                        onPointerDown={(event) => {
+                          if (event.button !== 0) {
+                            return;
+                          }
+
+                          selectCell(renderedRow.rowId, col, event.shiftKey);
+                          selectionDragActiveRef.current = !event.shiftKey;
+                        }}
+                        onPointerEnter={(event) => {
+                          if (!selectionDragActiveRef.current || event.buttons !== 1) {
+                            return;
+                          }
+
+                          selectCell(renderedRow.rowId, col, true);
+                        }}
                         onDoubleClick={
-                          rowId && editablePreview
-                            ? () => handleCellEditStart(rowId, col)
+                          isEditable
+                            ? () => handleCellEditStart(renderedRow.rowId, col)
                             : undefined
                         }
                       >

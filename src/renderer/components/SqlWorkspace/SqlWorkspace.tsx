@@ -39,6 +39,7 @@ import {
 } from './editable-preview-state';
 import { getExecutionDisplayState } from './sql-workspace-state';
 import {
+  applyEditablePreviewPaste,
   coerceEditablePreviewCellValue,
   findEditablePreviewBufferRow,
   formatEditablePreviewValue,
@@ -72,7 +73,9 @@ const getErrorMessage = (error: unknown) => {
 const EMPTY_GRID_SELECTION: GridSelectionState = {
   selectedRowIds: [],
   selectedCell: null,
+  selectedRange: null,
   anchorRowId: null,
+  anchorCell: null,
 };
 
 const getQueryExportValidationMessage = (
@@ -190,6 +193,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
   const [isApplying, setIsApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [postApplyNotice, setPostApplyNotice] = useState<EditablePreviewNotice | null>(null);
+  const [gridNotice, setGridNotice] = useState<string | null>(null);
   const [refreshLockReason, setRefreshLockReason] = useState<string | null>(null);
   const [lastExecutionKind, setLastExecutionKind] = useState<'preview' | 'custom' | null>(null);
   const [exportFormat, setExportFormat] = useState<QueryExportFormat>('xlsx');
@@ -282,6 +286,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     setLastDeletedRowIds([]);
     setApplyError(null);
     setPostApplyNotice(null);
+    setGridNotice(null);
     setRefreshLockReason(null);
     setLastExecutionKind(null);
   }, [previewTableKey]);
@@ -575,6 +580,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     setEditingValue(formatEditablePreviewValue(row.pendingRow[cell.column]));
     setApplyError(null);
     setPostApplyNotice(null);
+    setGridNotice(null);
   };
 
   const handleEditCommit = () => {
@@ -601,7 +607,12 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     setSelection({
       selectedRowIds: [],
       selectedCell: editingCell,
+      selectedRange: {
+        anchor: editingCell,
+        focus: editingCell,
+      },
       anchorRowId: editingCell.rowId,
+      anchorCell: editingCell,
     });
     setEditingCell(null);
     setEditingValue('');
@@ -619,11 +630,16 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
 
     setApplyError(null);
     setPostApplyNotice(null);
+    setGridNotice(null);
 
-    if (action.type === 'setCellNull') {
-      setEditBuffer(
-        updateTableEditCell(editBuffer, action.cell.rowId, action.cell.column, null)
+    if (action.type === 'clearCells') {
+      const nextBuffer = action.cells.reduce(
+        (currentBuffer, cell) =>
+          updateTableEditCell(currentBuffer, cell.rowId, cell.column, null),
+        editBuffer
       );
+
+      setEditBuffer(nextBuffer);
       setLastDeletedRowIds([]);
       setEditingCell(null);
       setEditingValue('');
@@ -656,6 +672,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     setEditingValue('');
     setApplyError(null);
     setPostApplyNotice(null);
+    setGridNotice(null);
   };
 
   const handleDiscardChanges = () => {
@@ -670,6 +687,34 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
     setEditingValue('');
     setApplyError(null);
     setPostApplyNotice(null);
+    setGridNotice(null);
+  };
+
+  const handlePasteClipboard = (clipboardText: string) => {
+    if (!editBuffer || !result) {
+      return;
+    }
+
+    const pasteResult = applyEditablePreviewPaste({
+      editBuffer,
+      columns: result.columns,
+      selection,
+      clipboardText,
+    });
+
+    if (pasteResult.updatedCellCount === 0) {
+      return;
+    }
+
+    setEditBuffer(pasteResult.buffer);
+    setLastDeletedRowIds([]);
+    setEditingCell(null);
+    setEditingValue('');
+    setApplyError(null);
+    setPostApplyNotice(null);
+    setGridNotice(
+      pasteResult.truncated ? t('editablePreview.pasteTruncated') : null
+    );
   };
 
   const handleApplyChanges = () => {
@@ -708,6 +753,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
         setIsApplying(true);
         setApplyError(null);
         setPostApplyNotice(null);
+        setGridNotice(null);
 
         try {
           let batchResult;
@@ -1012,6 +1058,11 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
                             {postApplyNotice.message}
                           </div>
                         ) : null}
+                        {gridNotice ? (
+                          <div className="rounded border border-[#faad14]/30 bg-[#faad14]/10 px-3 py-2 font-mono text-xs text-[#ffd666]">
+                            {gridNotice}
+                          </div>
+                        ) : null}
                         <DataGrid
                           result={displayState.result}
                           editablePreview={editablePreviewProps}
@@ -1022,6 +1073,7 @@ const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({ tabId }) => {
                           onEditCancel={handleEditCancel}
                           onDeleteAction={handleDeleteAction}
                           onEscapeAction={handleEscapeAction}
+                          onPasteClipboard={handlePasteClipboard}
                           restorableDeletedRowIds={lastDeletedRowIds}
                         />
                       </div>

@@ -1,12 +1,21 @@
+import { getCellsForGridSelection } from './data-grid-clipboard';
+
 export interface GridCellSelection {
   rowId: string;
   column: string;
 }
 
+export interface GridCellRange {
+  anchor: GridCellSelection;
+  focus: GridCellSelection;
+}
+
 export interface GridSelectionState {
   selectedRowIds: string[];
   selectedCell: GridCellSelection | null;
+  selectedRange: GridCellRange | null;
   anchorRowId: string | null;
+  anchorCell: GridCellSelection | null;
 }
 
 export interface ResolveGridRowSelectionInput extends GridSelectionState {
@@ -21,17 +30,23 @@ export interface ResolveGridRowSelectionInput extends GridSelectionState {
 
 export interface ResolveGridCellSelectionInput extends GridSelectionState {
   cell: GridCellSelection;
+  rowOrder: string[];
+  columnOrder: string[];
+  shiftKey: boolean;
   deletedRowIds?: readonly string[];
 }
 
 export interface ResolveGridDeleteActionInput {
   selectedRowIds: string[];
   selectedCell: GridCellSelection | null;
+  selectedRange: GridCellRange | null;
   isEditingCell: boolean;
   key: string;
   metaKey: boolean;
   ctrlKey: boolean;
   platform: string;
+  rowOrder: string[];
+  columnOrder: string[];
   deletedRowIds?: readonly string[];
 }
 
@@ -41,11 +56,11 @@ export type GridDeleteAction =
       rowIds: string[];
     }
   | {
-      type: 'setCellNull';
-      cell: GridCellSelection;
+      type: 'clearCells';
+      cells: GridCellSelection[];
     }
   | {
-  type: 'none';
+      type: 'none';
     };
 
 export type GridEscapeAction =
@@ -139,6 +154,19 @@ const getRangeRowIds = (
     .filter((rowId) => !isDeletedRow(rowId, deletedRowIds));
 };
 
+const isValidCellAnchor = (
+  cell: GridCellSelection | null,
+  rowOrder: string[],
+  columnOrder: string[],
+  deletedRowIds: readonly string[]
+) =>
+  Boolean(
+    cell &&
+      rowOrder.includes(cell.rowId) &&
+      columnOrder.includes(cell.column) &&
+      !isDeletedRow(cell.rowId, deletedRowIds)
+  );
+
 const getRangeAnchorRowId = (
   anchorRowId: string | null,
   selectedRowIds: string[],
@@ -159,25 +187,85 @@ const getRangeAnchorRowId = (
   return null;
 };
 
+const getCellRangeAnchor = ({
+  anchorCell,
+  selectedCell,
+  cell,
+  rowOrder,
+  columnOrder,
+  deletedRowIds,
+}: {
+  anchorCell: GridCellSelection | null;
+  selectedCell: GridCellSelection | null;
+  cell: GridCellSelection;
+  rowOrder: string[];
+  columnOrder: string[];
+  deletedRowIds: readonly string[];
+}): GridCellSelection => {
+  if (isValidCellAnchor(anchorCell, rowOrder, columnOrder, deletedRowIds)) {
+    return anchorCell as GridCellSelection;
+  }
+
+  if (isValidCellAnchor(selectedCell, rowOrder, columnOrder, deletedRowIds)) {
+    return selectedCell as GridCellSelection;
+  }
+
+  return cell;
+};
+
 export const resolveGridCellSelection = ({
   selectedRowIds,
   selectedCell,
+  selectedRange,
   anchorRowId,
+  anchorCell,
   cell,
+  rowOrder,
+  columnOrder,
+  shiftKey,
   deletedRowIds = [],
 }: ResolveGridCellSelectionInput): GridSelectionState => {
-  if (isDeletedRow(cell.rowId, deletedRowIds)) {
+  if (isDeletedRow(cell.rowId, deletedRowIds) || !columnOrder.includes(cell.column)) {
     return {
       selectedRowIds,
       selectedCell,
+      selectedRange,
       anchorRowId,
+      anchorCell,
+    };
+  }
+
+  if (shiftKey) {
+    const resolvedAnchorCell = getCellRangeAnchor({
+      anchorCell,
+      selectedCell,
+      cell,
+      rowOrder,
+      columnOrder,
+      deletedRowIds,
+    });
+
+    return {
+      selectedRowIds: [],
+      selectedCell: cell,
+      selectedRange: {
+        anchor: resolvedAnchorCell,
+        focus: cell,
+      },
+      anchorRowId: resolvedAnchorCell.rowId,
+      anchorCell: resolvedAnchorCell,
     };
   }
 
   return {
     selectedRowIds: [],
     selectedCell: cell,
+    selectedRange: {
+      anchor: cell,
+      focus: cell,
+    },
     anchorRowId: cell.rowId,
+    anchorCell: cell,
   };
 };
 
@@ -231,7 +319,9 @@ export const resolveGridRowSelection = ({
     return {
       selectedRowIds: getFilteredSelectedRowIds(rowOrder, selectedRowIds, deletedRowIds),
       selectedCell,
+      selectedRange: null,
       anchorRowId,
+      anchorCell: null,
     };
   }
 
@@ -255,14 +345,18 @@ export const resolveGridRowSelection = ({
       return {
         selectedRowIds: getFilteredSelectedRowIds(rowOrder, selectedRowIds, deletedRowIds),
         selectedCell: null,
+        selectedRange: null,
         anchorRowId: nextAnchorRowId ?? rowId,
+        anchorCell: null,
       };
     }
 
     return {
       selectedRowIds: rangeRowIds,
       selectedCell: null,
+      selectedRange: null,
       anchorRowId: nextAnchorRowId ?? rowId,
+      anchorCell: null,
     };
   }
 
@@ -288,25 +382,32 @@ export const resolveGridRowSelection = ({
     return {
       selectedRowIds: nextSelectedRowIds,
       selectedCell: null,
+      selectedRange: null,
       anchorRowId: nextAnchorCandidate,
+      anchorCell: null,
     };
   }
 
   return {
     selectedRowIds: [rowId],
     selectedCell: null,
+    selectedRange: null,
     anchorRowId: rowId,
+    anchorCell: null,
   };
 };
 
 export const resolveGridDeleteAction = ({
   selectedRowIds,
   selectedCell,
+  selectedRange,
   isEditingCell,
   key,
   metaKey,
   ctrlKey,
   platform,
+  rowOrder,
+  columnOrder,
   deletedRowIds = [],
 }: ResolveGridDeleteActionInput): GridDeleteAction => {
   if (isEditingCell) {
@@ -322,16 +423,26 @@ export const resolveGridDeleteAction = ({
     };
   }
 
-  if (
-    activeRowIds.length === 0 &&
-    selectedCell &&
-    !isDeletedRow(selectedCell.rowId, deletedRowIds) &&
-    isCellNullShortcut({ key, metaKey, ctrlKey })
-  ) {
-    return {
-      type: 'setCellNull',
-      cell: selectedCell,
-    };
+  if (activeRowIds.length === 0 && isCellNullShortcut({ key, metaKey, ctrlKey })) {
+    const cells = getCellsForGridSelection({
+      selection: {
+        selectedRowIds,
+        selectedCell,
+        selectedRange,
+        anchorRowId: null,
+        anchorCell: null,
+      },
+      rowOrder,
+      columnOrder,
+      deletedRowIds,
+    });
+
+    if (cells.length > 0) {
+      return {
+        type: 'clearCells',
+        cells,
+      };
+    }
   }
 
   return { type: 'none' };

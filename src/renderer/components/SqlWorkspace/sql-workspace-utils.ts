@@ -1,4 +1,8 @@
-import { GridCellSelection } from '../DataGrid/data-grid-editing-state';
+import {
+  GridCellSelection,
+  GridSelectionState,
+} from '../DataGrid/data-grid-editing-state';
+import { parseClipboardTable } from '../DataGrid/data-grid-clipboard';
 import {
   TableEditBuffer,
   TableEditBufferRow,
@@ -124,4 +128,84 @@ export const getEditablePreviewApplyBuffer = ({
     editingCell.column,
     nextValue
   );
+};
+
+export const applyEditablePreviewPaste = ({
+  editBuffer,
+  columns,
+  selection,
+  clipboardText,
+}: {
+  editBuffer: TableEditBuffer;
+  columns: string[];
+  selection: GridSelectionState;
+  clipboardText: string;
+}) => {
+  const targetCell = selection.selectedCell;
+  if (!targetCell) {
+    return {
+      buffer: editBuffer,
+      updatedCellCount: 0,
+      truncated: false,
+    };
+  }
+
+  const startRowIndex = editBuffer.rows.findIndex((row) => row.rowId === targetCell.rowId);
+  const startColumnIndex = columns.indexOf(targetCell.column);
+
+  if (startRowIndex === -1 || startColumnIndex === -1) {
+    return {
+      buffer: editBuffer,
+      updatedCellCount: 0,
+      truncated: false,
+    };
+  }
+
+  const parsedRows = parseClipboardTable(clipboardText);
+  let nextBuffer = editBuffer;
+  let updatedCellCount = 0;
+  let truncated = false;
+
+  parsedRows.forEach((clipboardRow, rowOffset) => {
+    const targetRow = editBuffer.rows[startRowIndex + rowOffset];
+
+    if (!targetRow) {
+      if (clipboardRow.some((value) => value !== '')) {
+        truncated = true;
+      }
+      return;
+    }
+
+    if (targetRow.deleted) {
+      truncated = true;
+      return;
+    }
+
+    clipboardRow.forEach((rawValue, columnOffset) => {
+      const column = columns[startColumnIndex + columnOffset];
+
+      if (!column) {
+        if (rawValue !== '') {
+          truncated = true;
+        }
+        return;
+      }
+
+      const currentRow =
+        nextBuffer.rows.find((candidate) => candidate.rowId === targetRow.rowId) ?? targetRow;
+      const nextValue = coerceEditablePreviewCellValue(
+        rawValue,
+        currentRow.pendingRow[column]
+      );
+
+      nextBuffer = updateTableEditCell(nextBuffer, targetRow.rowId, column, nextValue);
+      updatedCellCount += 1;
+    });
+  });
+
+  return {
+    buffer: nextBuffer,
+    updatedCellCount,
+    truncated,
+  };
 };

@@ -65,11 +65,25 @@ describe('ConnectionManager', () => {
   };
   const connectionManagerState = connectionManager as unknown as {
     connections: Map<string, DatabaseDriver>;
+    connectionConfigs: Map<string, {
+      id: string;
+      name: string;
+      dbType: 'mysql' | 'postgres' | 'mssql' | 'clickhouse' | 'sqlite';
+      host: string;
+      port: number;
+      username: string;
+      database?: string;
+      password?: string;
+    }>;
+    sqliteFingerprints: Map<string, unknown>;
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDb.prepare.mockReset();
     connectionManagerState.connections.clear();
+    connectionManagerState.connectionConfigs.clear();
+    connectionManagerState.sqliteFingerprints.clear();
     vi.mocked(sqliteService.getDb).mockReturnValue(mockDb as unknown as Database.Database);
   });
 
@@ -184,7 +198,30 @@ describe('ConnectionManager', () => {
   });
 
   it('should return read-only metadata when the driver does not support table edit metadata', async () => {
-    connectionManagerState.connections.set('conn-id-5', {} as DatabaseDriver);
+    connectionManagerState.connections.set('conn-id-5', {
+      disconnect: vi.fn().mockResolvedValue(undefined),
+    } as unknown as DatabaseDriver);
+    connectionManagerState.connectionConfigs.set('conn-id-5', {
+      id: 'conn-id-5',
+      name: 'Analytics DB',
+      dbType: 'mysql',
+      host: 'localhost',
+      port: 3306,
+      username: 'user',
+      database: 'analytics',
+    });
+    mockDb.prepare.mockReturnValue({
+      get: vi.fn().mockReturnValue({
+        id: 'conn-id-5',
+        name: 'Analytics DB',
+        db_type: 'mysql',
+        host: 'localhost',
+        port: 3306,
+        username: 'user',
+        database: 'analytics',
+        encrypted_password: null,
+      }),
+    });
 
     const result = await connectionManager.getTableEditMetadata('conn-id-5', {
       dbType: 'mysql',
@@ -229,12 +266,34 @@ describe('ConnectionManager', () => {
 
   it('should reject batch execution when the driver does not support it', async () => {
     connectionManagerState.connections.set('conn-id-7', {
+      disconnect: vi.fn().mockResolvedValue(undefined),
       getTableEditMetadata: vi.fn().mockResolvedValue({
         editable: false,
         reason: 'Editing is not supported for this database.',
         key: null
       })
     } as unknown as DatabaseDriver);
+    connectionManagerState.connectionConfigs.set('conn-id-7', {
+      id: 'conn-id-7',
+      name: 'Analytics DB',
+      dbType: 'mysql',
+      host: 'localhost',
+      port: 3306,
+      username: 'user',
+      database: 'analytics',
+    });
+    mockDb.prepare.mockReturnValue({
+      get: vi.fn().mockReturnValue({
+        id: 'conn-id-7',
+        name: 'Analytics DB',
+        db_type: 'mysql',
+        host: 'localhost',
+        port: 3306,
+        username: 'user',
+        database: 'analytics',
+        encrypted_password: null,
+      }),
+    });
 
     await expect(
       connectionManager.executeBatch('conn-id-7', ['UPDATE users SET name = "A"'])

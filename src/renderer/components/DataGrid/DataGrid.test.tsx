@@ -142,6 +142,20 @@ describe('DataGrid layout', () => {
               column: 'email',
             },
             anchorRowId: buffer.rows[0].rowId,
+            anchorCell: {
+              rowId: buffer.rows[0].rowId,
+              column: 'email',
+            },
+            selectedRange: {
+              anchor: {
+                rowId: buffer.rows[0].rowId,
+                column: 'email',
+              },
+              focus: {
+                rowId: buffer.rows[0].rowId,
+                column: 'email',
+              },
+            },
           },
           editingCell: null,
         }}
@@ -187,6 +201,20 @@ describe('DataGrid layout', () => {
               column: 'email',
             },
             anchorRowId: rowId,
+            anchorCell: {
+              rowId,
+              column: 'email',
+            },
+            selectedRange: {
+              anchor: {
+                rowId,
+                column: 'email',
+              },
+              focus: {
+                rowId,
+                column: 'email',
+              },
+            },
           },
           editingCell: {
             rowId,
@@ -201,7 +229,7 @@ describe('DataGrid layout', () => {
     expect(markup).toContain('value="draft@example.com"');
   });
 
-  it('keeps read-only grids without a keyboard tab stop', () => {
+  it('keeps read-only grids focusable for keyboard copy shortcuts', () => {
     const result: QueryResult = {
       columns: ['id'],
       rows: [{ id: 1 }],
@@ -211,7 +239,7 @@ describe('DataGrid layout', () => {
 
     const markup = renderToStaticMarkup(<DataGrid result={result} />);
 
-    expect(markup).not.toContain('tabindex="0"');
+    expect(markup).toContain('tabindex="0"');
   });
 
   it('focuses the grid keyboard target when selection clicks request it', () => {
@@ -222,5 +250,52 @@ describe('DataGrid layout', () => {
     focusGridKeyboardTarget(focusTarget);
 
     expect(focusTarget.focus).toHaveBeenCalledWith({ preventScroll: true });
+  });
+
+  it('renders data attributes for range-selected cells', () => {
+    const result: QueryResult = {
+      columns: ['id', 'email'],
+      rows: [{ id: 1, email: 'a@example.com' }],
+      rowCount: 1,
+      durationMs: 12,
+    };
+
+    const buffer = createTableEditBuffer(result.rows, ['id']);
+    const rowId = buffer.rows[0].rowId;
+
+    const markup = renderToStaticMarkup(
+      <DataGrid
+        result={result}
+        editablePreview={{
+          buffer,
+          selection: {
+            selectedRowIds: [],
+            selectedCell: {
+              rowId,
+              column: 'email',
+            },
+            anchorRowId: rowId,
+            anchorCell: {
+              rowId,
+              column: 'id',
+            },
+            selectedRange: {
+              anchor: {
+                rowId,
+                column: 'id',
+              },
+              focus: {
+                rowId,
+                column: 'email',
+              },
+            },
+          },
+          editingCell: null,
+        }}
+      />
+    );
+
+    expect(markup).toContain('data-cell-in-range="true"');
+    expect(markup).toContain('data-cell-active="true"');
   });
 });
