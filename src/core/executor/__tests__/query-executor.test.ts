@@ -65,10 +65,18 @@ DELETE FROM logs WHERE created_at < NOW() - INTERVAL '7 days'
   describe('execute', () => {
     it('should inject limit and execute query', async () => {
       await QueryExecutor.execute('conn1', 'SELECT * FROM users');
-      expect(connectionManager.executeQuery).toHaveBeenCalledWith('conn1', 'SELECT * FROM users LIMIT 1000');
+      expect(connectionManager.executeQuery).toHaveBeenCalledWith('conn1', 'SELECT * FROM users LIMIT 1000;');
     });
 
-    it('should execute multi-statement SQL scripts without injecting limit', async () => {
+    it('should append a semicolon before executing non-select statements', async () => {
+      await QueryExecutor.execute('conn2', 'UPDATE users SET name = "Alice" WHERE id = 1');
+      expect(connectionManager.executeQuery).toHaveBeenCalledWith(
+        'conn2',
+        'UPDATE users SET name = "Alice" WHERE id = 1;'
+      );
+    });
+
+    it('should execute multi-statement SQL scripts without injecting limit and ensure the last statement is terminated', async () => {
       const sql = `
 SELECT * FROM users;
 UPDATE users SET name = 'Alice' WHERE id = 1;
@@ -77,7 +85,10 @@ DELETE FROM logs WHERE created_at < NOW() - INTERVAL '7 days'
 
       await QueryExecutor.execute('conn-script', sql);
 
-      expect(connectionManager.executeQuery).toHaveBeenCalledWith('conn-script', sql);
+      expect(connectionManager.executeQuery).toHaveBeenCalledWith(
+        'conn-script',
+        `${sql};`
+      );
     });
 
     it('should update execution status during execution', async () => {

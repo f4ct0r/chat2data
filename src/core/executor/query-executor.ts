@@ -4,6 +4,18 @@ import { QueryResult } from '../db/types';
 export class QueryExecutor {
   private static executionStatus = new Map<string, 'idle' | 'executing'>();
 
+  private static ensureTrailingSemicolon(sql: string): string {
+    if (!sql.trim()) {
+      return sql;
+    }
+
+    if (/;\s*$/.test(sql)) {
+      return sql;
+    }
+
+    return `${sql.trimEnd()};`;
+  }
+
   /**
    * 获取当前连接的查询状态
    */
@@ -38,7 +50,7 @@ export class QueryExecutor {
    * 执行查询（带大结果集防御）
    */
   public static async execute(connectionId: string, sql: string): Promise<QueryResult> {
-    const safeSql = this.injectLimit(sql);
+    const safeSql = this.ensureTrailingSemicolon(this.injectLimit(sql));
     
     this.executionStatus.set(connectionId, 'executing');
     try {
