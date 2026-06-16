@@ -179,8 +179,8 @@ Example JSON output:
 
   private static parseAgentResponse(rawText: string): AgentResponse {
     try {
-      // Sometimes LLMs still wrap json in markdown block even if told not to.
-      let cleaned = rawText.trim();
+      // Strip <think>...</think> blocks that some models emit before the JSON.
+      let cleaned = rawText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
       if (cleaned.startsWith('```json')) {
         cleaned = cleaned.replace(/^```json/, '');
       } else if (cleaned.startsWith('```')) {

@@ -54,8 +54,8 @@ const ObjectBrowser: React.FC<ObjectBrowserProps> = ({
     if (!connectionId) return;
     setLoading(true);
     try {
-      if (refreshCompletionSchema) {
-        await window.api.db.refreshSchemaIndex(connectionId);
+      if (refreshCompletionSchema && connectionDatabase) {
+        await window.api.db.refreshSchemaIndex(connectionId, connectionDatabase);
       }
 
       // For some DBs we might want to start with databases, for others schemas
